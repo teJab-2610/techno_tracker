@@ -245,6 +245,47 @@ The hash includes the **generation timestamp** (date + time), so:
 
 ---
 
+## Data Validation
+
+Before generating any PDFs, the script automatically validates attendance and wage sheet data. If mismatches are found, all warnings are printed and the user is asked to confirm before proceeding.
+
+### Checks Performed
+
+| # | Check | What It Does |
+|---|-------|-------------|
+| 1 | **Present days match** | Counts `P` and `PPH` marks from daily attendance columns (G–AH) and verifies the total matches the Present Days summary (col AI) |
+| 2 | **Week offs match** | Counts `W/O` marks from daily columns and verifies against Week Offs summary (col AK) |
+| 3 | **Working days cross-check** | Compares Attendance sheet TLLP (col AN) with Wage Sheet Working Days (col Q) — these must match |
+| 4 | **TLLP formula check** | Verifies that TLLP = Present Days + Public Holidays |
+| 5 | **Total days check** | Verifies that Total Days (col AL) = Present Days + Week Offs |
+| 6 | **Missing/extra employees** | Flags employees found in Attendance but missing from Wage Sheet, or vice versa |
+
+### Attendance Mark Codes
+
+| Mark | Meaning | Counted As |
+|------|---------|------------|
+| `P` | Present | Present day |
+| `PPH` | Present on Public Holiday | Present day + Public holiday |
+| `W/O` | Week Off | Week off (paid, not a working day) |
+| `A` | Absent | Absent |
+
+### Example Warning Output
+
+```
+============================================================
+  2 WARNING(S) FOUND
+============================================================
+  [PRESENT MISMATCH] J RAHELU (PPRR01063947): Counted 25 present days (P=24, PPH=1) but Attendance sheet says 26
+  [WORKING DAYS MISMATCH] K VAMSI (PPRR01086793): Attendance TLLP = 25 but Wage Sheet Working Days = 26
+============================================================
+
+Warnings found. Continue generating payslips? (y/n):
+```
+
+If no mismatches are found, the script prints `All validations passed.` and proceeds directly.
+
+---
+
 ## Output
 
 - PDFs are saved as `<EmployeeName>_<MONTH>_<YEAR>.pdf`
@@ -259,6 +300,35 @@ The hash includes the **generation timestamp** (date + time), so:
 | C SUVARNA LAXMI | `C_SUVARNA_LAXMI_FEB_2026.pdf` |
 | O.ANITHA DEVI | `OANITHA_DEVI_FEB_2026.pdf` |
 | P.SAI SURENDRA BHANU | `PSAI_SURENDRA_BHANU_FEB_2026.pdf` |
+
+---
+
+## Building a Windows Executable (.exe)
+
+You can package the script into a standalone `.exe` so it runs on any Windows machine **without Python installed**.
+
+### Steps
+
+1. Copy the project folder to a **Windows machine** that has Python 3.8+ installed
+2. Double-click `build_windows_exe.bat` (or run it from Command Prompt)
+3. The executable will be created at `dist\generate_payslips.exe`
+
+### Usage on Windows
+
+```cmd
+generate_payslips.exe "FEB_2026_ANAKAPALLI_TL4P SALARY SHEET.xlsx"
+generate_payslips.exe "FEB_2026_ANAKAPALLI_TL4P SALARY SHEET.xlsx" --bw
+generate_payslips.exe "FEB_2026_ANAKAPALLI_TL4P SALARY SHEET.xlsx" --list
+generate_payslips.exe "FEB_2026_ANAKAPALLI_TL4P SALARY SHEET.xlsx" --designation "PICKER / PACKER"
+```
+
+### Notes
+
+- The build script installs all dependencies automatically (`openpyxl`, `reportlab`, `qrcode`, `pillow`, `pyinstaller`)
+- The resulting `.exe` is fully standalone — no Python or libraries needed on the target machine
+- The `.exe` must be run from **Command Prompt** or **PowerShell** (it's a console application, not a GUI)
+- Place the `.exe` in the same folder as your Excel files, or pass the full path to the Excel file
+- Build must be done on **Windows** — you cannot cross-compile from macOS/Linux
 
 ---
 

@@ -147,6 +147,8 @@ def read_attendance(wb):
     ws = wb["Attendence"]
     month_cell = ws["D1"].value
 
+    # Determine how many day columns exist (G onwards, up to col AH = index 33)
+    # Day columns are G(6) through AH(33) = 28 max days
     attendance = {}
     for row in ws.iter_rows(min_row=4, max_row=ws.max_row, values_only=False):
         sno = row[0].value
@@ -154,17 +156,122 @@ def read_attendance(wb):
             continue
 
         emp_code = row[1].value
+
+        # Count daily marks from columns G(6) to AH(33)
+        counted_p = 0
+        counted_pph = 0
+        counted_wo = 0
+        counted_a = 0
+        for c in range(6, 34):
+            val = row[c].value
+            if val is None:
+                continue
+            mark = str(val).strip().upper()
+            if mark == "PPH":
+                counted_pph += 1
+            elif mark == "P":
+                counted_p += 1
+            elif mark == "W/O":
+                counted_wo += 1
+            elif mark.startswith("A"):
+                counted_a += 1
+
         attendance[emp_code] = {
             "name": row[2].value,
-            "present": row[34].value or 0,
-            "absent": row[35].value or 0,
-            "week_offs": row[36].value or 0,
-            "total_days": row[37].value or 0,
-            "holidays": row[38].value or 0,
-            "tllp": row[39].value or 0,
+            "present": row[34].value or 0,       # AI - Present Days (sheet value)
+            "absent": row[35].value or 0,         # AJ
+            "week_offs": row[36].value or 0,      # AK
+            "total_days": row[37].value or 0,     # AL
+            "holidays": row[38].value or 0,       # AM
+            "tllp": row[39].value or 0,           # AN
+            # Counted from daily marks
+            "counted_p": counted_p,
+            "counted_pph": counted_pph,
+            "counted_wo": counted_wo,
+            "counted_a": counted_a,
+            "counted_present": counted_p + counted_pph,  # PPH counts as present
         }
 
     return month_cell, attendance
+
+
+def validate_data(employees, attendance, all_employees=None):
+    """Validate attendance counts and cross-check with wage sheet. Returns list of warnings.
+
+    employees: the filtered list to validate
+    all_employees: the full list (used for the EXTRA check)
+    """
+    if all_employees is None:
+        all_employees = employees
+    warnings = []
+
+    for emp in employees:
+        code = emp["emp_code"]
+        name = emp["name_attendance"] or emp["name_aadhar"] or f"Emp#{emp['sno']}"
+        att = attendance.get(code)
+
+        if att is None:
+            warnings.append(f"[MISSING] {name} ({code}): Not found in Attendance sheet")
+            continue
+
+        prefix = f"{name} ({code})"
+
+        # 1. Verify counted present days match sheet's Present Days (col AI)
+        sheet_present = int(safe_num(att["present"]))
+        counted_present = att["counted_present"]
+        if counted_present != sheet_present:
+            warnings.append(
+                f"[PRESENT MISMATCH] {prefix}: "
+                f"Counted {counted_present} present days (P={att['counted_p']}, PPH={att['counted_pph']}) "
+                f"but Attendance sheet says {sheet_present}"
+            )
+
+        # 2. Verify counted week offs match sheet's Week Offs (col AK)
+        sheet_wo = int(safe_num(att["week_offs"]))
+        if att["counted_wo"] != sheet_wo:
+            warnings.append(
+                f"[WEEK OFF MISMATCH] {prefix}: "
+                f"Counted {att['counted_wo']} week offs but Attendance sheet says {sheet_wo}"
+            )
+
+        # 3. Cross-check TLLP (Attendance AN) vs Working Days (Wage Sheet Q)
+        wage_working_days = int(safe_num(emp["working_days"]))
+        att_tllp = int(safe_num(att["tllp"]))
+        if att_tllp != wage_working_days:
+            warnings.append(
+                f"[WORKING DAYS MISMATCH] {prefix}: "
+                f"Attendance TLLP = {att_tllp} but Wage Sheet Working Days = {wage_working_days}"
+            )
+
+        # 4. Verify TLLP = Present + Public Holidays
+        sheet_holidays = int(safe_num(att["holidays"]))
+        expected_tllp = sheet_present + sheet_holidays
+        if expected_tllp != att_tllp:
+            warnings.append(
+                f"[TLLP MISMATCH] {prefix}: "
+                f"Present ({sheet_present}) + Holidays ({sheet_holidays}) = {expected_tllp} "
+                f"but TLLP = {att_tllp}"
+            )
+
+        # 5. Verify total days adds up
+        sheet_total = int(safe_num(att["total_days"]))
+        expected_total = sheet_present + sheet_wo
+        if expected_total != sheet_total:
+            warnings.append(
+                f"[TOTAL DAYS MISMATCH] {prefix}: "
+                f"Present ({sheet_present}) + Week Offs ({sheet_wo}) = {expected_total} "
+                f"but Total Days = {sheet_total}"
+            )
+
+    # Check for employees in Attendance but not in Wage Sheet (use full list)
+    wage_codes = {e["emp_code"] for e in all_employees}
+    for code, att in attendance.items():
+        if code not in wage_codes:
+            warnings.append(
+                f"[EXTRA] {att['name']} ({code}): In Attendance sheet but not in Wage Sheet"
+            )
+
+    return warnings
 
 
 def safe_num(val, default=0):
@@ -538,6 +645,24 @@ def main():
             print(f"No employees matched designation: {args.designation}")
             print("Use --list to see all designations")
             sys.exit(1)
+
+    # Validate data
+    print("\nValidating attendance vs wage sheet data...")
+    warnings = validate_data(filtered, attendance, all_employees=employees)
+    if warnings:
+        print(f"\n{'='*60}")
+        print(f"  {len(warnings)} WARNING(S) FOUND")
+        print(f"{'='*60}")
+        for w in warnings:
+            print(f"  {w}")
+        print(f"{'='*60}\n")
+
+        response = input("Warnings found. Continue generating payslips? (y/n): ").strip().lower()
+        if response != "y":
+            print("Aborted.")
+            sys.exit(0)
+    else:
+        print("All validations passed.\n")
 
     # Output directory
     if isinstance(month_date, datetime):
