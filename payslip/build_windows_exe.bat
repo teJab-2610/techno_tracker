@@ -1,13 +1,13 @@
 @echo off
 REM ============================================================
-REM  Build generate_payslips.py into a standalone Windows .exe
+REM  Build payslip_gui.py into a standalone Windows .exe
 REM
 REM  Prerequisites:
 REM    1. Python 3.8+ installed on this Windows machine
 REM    2. Run this script from the project directory
 REM
 REM  Output:
-REM    dist\generate_payslips.exe  (single standalone file)
+REM    dist\PayslipGenerator.exe  (single standalone file, no console)
 REM ============================================================
 
 echo.
@@ -35,12 +35,13 @@ echo.
 echo [2/3] Building executable...
 pyinstaller ^
     --onefile ^
-    --name generate_payslips ^
-    --console ^
+    --windowed ^
+    --name PayslipGenerator ^
     --hidden-import=qrcode.image.pil ^
     --hidden-import=reportlab.graphics ^
     --hidden-import=PIL ^
-    generate_payslips.py
+    --add-data "generate_payslips.py;." ^
+    payslip_gui.py
 
 if errorlevel 1 (
     echo ERROR: Build failed.
@@ -51,19 +52,14 @@ if errorlevel 1 (
 echo.
 echo [3/3] Cleaning up build artifacts...
 rmdir /s /q build 2>nul
-del /q generate_payslips.spec 2>nul
+del /q PayslipGenerator.spec 2>nul
 
 echo.
 echo ============================================================
 echo  BUILD SUCCESSFUL!
-echo  Executable: dist\generate_payslips.exe
+echo  Executable: dist\PayslipGenerator.exe
 echo ============================================================
 echo.
-echo Usage:
-echo   dist\generate_payslips.exe "SALARY_SHEET.xlsx"
-echo   dist\generate_payslips.exe "SALARY_SHEET.xlsx" --bw
-echo   dist\generate_payslips.exe "SALARY_SHEET.xlsx" --list
-echo   dist\generate_payslips.exe "SALARY_SHEET.xlsx" --designation "PICKER / PACKER"
-echo   dist\generate_payslips.exe "SALARY_SHEET.xlsx" --employees "J RAHELU,G LAVANYA"
+echo Double-click PayslipGenerator.exe to launch the GUI.
 echo.
 pause
