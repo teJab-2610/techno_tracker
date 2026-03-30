@@ -1,0 +1,569 @@
+{
+  "name": "Techno Tracker Attendance",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [-400, 656],
+      "webhookId": "techno-tracker-webhook",
+      "id": "ea0f131d-ece6-4135-8820-00881fe394ae",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.message.text ?? ($json.message.location ? '__location__' : ($json.message.document ? '__document__' : '__unknown__')) }}",
+        "rules": {
+          "rules": [
+            { "value2": "/checkin", "output": 0 },
+            { "value2": "__location__", "output": 1 },
+            { "value2": "__document__", "output": 2 },
+            { "value2": "", "operation": "regex", "matchRegex": ".*", "output": 3 }
+          ]
+        },
+        "fallbackOutput": 3
+      },
+      "name": "Message Type Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [-176, 656],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=👋 Hi {{ $('Telegram Trigger').item.json.message.from.first_name }}! Please share your 📍 location to mark attendance.",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Share My Location",
+                    "additionalFields": { "request_location": true }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": { "resize_keyboard": true, "one_time_keyboard": true },
+        "additionalFields": { "appendAttribution": false, "disable_notification": false }
+      },
+      "name": "Ask for Location",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [48, 400],
+      "id": "48a0afc7-d303-4bfd-8d02-ac6a2f6c2e78",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "pending_checkins", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.message.chat.id }}",
+            "user_id": "={{ $json.message.from.id }}",
+            "name": "={{ ($json.message.from.first_name ?? '') + ($json.message.from.last_name ? ' ' + $json.message.from.last_name : '') }}",
+            "username": "={{ '@' + ($json.message.from.username ?? 'N/A') }}",
+            "latitude": "={{ $json.message.location.latitude }}",
+            "longitude": "={{ $json.message.location.longitude }}",
+            "location_timestamp": "={{ $json.message.date }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "chat_id", "displayName": "chat_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "user_id", "displayName": "user_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "name", "displayName": "name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "username", "displayName": "username", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "latitude", "displayName": "latitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "longitude", "displayName": "longitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "location_timestamp", "displayName": "location_timestamp", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
+        },
+        "options": { "cellFormat": "RAW" }
+      },
+      "name": "Save Pending Checkin",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [48, 656],
+      "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=📍 Location received!\n\nNow please take a live photo 📸 and send it as a *file/document* (not as a photo).\n\n📱 How to send as file:\n• Android: tap 📎 → File → select your photo\n• iPhone: tap 📎 → File → browse photos\n\n⚠️ Must be sent within 2 minutes.",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": { "remove_keyboard": true },
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "Ask for Photo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [272, 656],
+      "id": "c2d3e4f5-a6b7-8901-cdef-123456789012",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "pending_checkins", "mode": "name" },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "chat_id",
+              "lookupValue": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+            }
+          ]
+        },
+        "options": { "returnFirstMatch": true }
+      },
+      "name": "Lookup Pending Checkin",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [48, 912],
+      "id": "d3e4f5a6-b7c8-9012-defa-234567890123",
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "fileId": "={{ $('Telegram Trigger').item.json.message.document.file_id }}",
+        "download": true,
+        "additionalFields": {}
+      },
+      "name": "Download Document",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [272, 912],
+      "id": "a6b7c8d9-e0f1-2345-abcd-567890123456",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─── STEP 1: Validate binary input ───────────────────────────────────────────\nif (!items[0].binary || Object.keys(items[0].binary).length === 0) {\n  return [{ json: {\n    exifFound: false,\n    exifDateTimeOriginal: null,\n    exifGpsLat: null,\n    exifGpsLng: null,\n    fileType: 'no_binary',\n    note: 'No binary data received from Download Document node',\n    log: '❌ Binary is empty — Download Document node may have failed silently'\n  }}];\n}\n\nconst binaryKey = Object.keys(items[0].binary)[0];\nconst buffer = Buffer.from(items[0].binary[binaryKey].data, 'base64');\nconst magicHex = buffer.slice(0, 4).toString('hex');\nconst magicBytes = [buffer[0], buffer[1], buffer[2], buffer[3]];\n\n// ─── STEP 2: Detect file type from magic bytes ────────────────────────────────\nconst isJPEG = buffer[0] === 0xFF && buffer[1] === 0xD8;\nconst isPNG  = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;\nconst isHEIC = buffer.slice(4, 8).toString('ascii') === 'ftyp';\nconst isWEBP = buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP';\n\nlet fileType = isJPEG ? 'JPEG' : isPNG ? 'PNG' : isHEIC ? 'HEIC' : isWEBP ? 'WEBP' : 'unknown';\n\nconst baseLog = [\n  `📁 Binary field name: \"${binaryKey}\"`,\n  `📦 Buffer size: ${buffer.length} bytes`,\n  `🔢 Magic bytes: ${magicHex} → detected as ${fileType}`,\n  `🔢 Raw first bytes: [${magicBytes.join(', ')}]`\n];\n\nif (!isJPEG) {\n  return [{ json: {\n    exifFound: false,\n    exifDateTimeOriginal: null,\n    exifGpsLat: null,\n    exifGpsLng: null,\n    fileType,\n    note: `${fileType} detected — EXIF not parsed, will use message.date fallback`,\n    log: baseLog.join('\\n') + `\\n⚠️ Not a JPEG — skipping EXIF parse, fallback to message.date`\n  }}];\n}\n\n// ─── STEP 3: Parse EXIF (JPEG only) ──────────────────────────────────────────\nlet result = {\n  exifFound: false,\n  exifDateTimeOriginal: null,\n  exifGpsLat: null,\n  exifGpsLng: null,\n  fileType: 'JPEG'\n};\nconst logs = [...baseLog];\n\nfunction readUInt16(buf, offset, le) {\n  return le ? buf[offset] | (buf[offset+1]<<8) : (buf[offset]<<8) | buf[offset+1];\n}\nfunction readUInt32(buf, offset, le) {\n  return le\n    ? buf[offset] | (buf[offset+1]<<8) | (buf[offset+2]<<16) | (buf[offset+3]<<24)\n    : (buf[offset]<<24) | (buf[offset+1]<<16) | (buf[offset+2]<<8) | buf[offset+3];\n}\nfunction readRational(buf, offset, le) {\n  const num = readUInt32(buf, offset, le);\n  const den = readUInt32(buf, offset+4, le);\n  return den !== 0 ? num/den : 0;\n}\nfunction readString(buf, offset, length) {\n  return buf.slice(offset, offset+length).toString('ascii').replace(/\\0/g,'').trim();\n}\n\ntry {\n  let offset = 2, app1Offset = -1;\n  while (offset < buffer.length - 1) {\n    if (buffer[offset] === 0xFF && buffer[offset+1] === 0xE1) {\n      app1Offset = offset;\n      logs.push(`✅ APP1 segment found at offset ${offset}`);\n      break;\n    }\n    if (buffer[offset] === 0xFF && buffer[offset+1] !== 0xFF) {\n      const segLen = readUInt16(buffer, offset+2, false);\n      offset += 2 + segLen;\n    } else { offset++; }\n  }\n\n  if (app1Offset === -1) {\n    logs.push('⚠️ No APP1/EXIF segment found in JPEG — photo likely has no EXIF metadata (stripped by Telegram or camera)');\n    return [{ json: { ...result, note: 'No EXIF segment — using message.date fallback', log: logs.join('\\n') } }];\n  }\n\n  const exifHeader = buffer.slice(app1Offset+4, app1Offset+10).toString('ascii');\n  logs.push(`🔍 APP1 header: \"${exifHeader}\"`);\n\n  if (!exifHeader.startsWith('Exif')) {\n    logs.push('⚠️ APP1 segment exists but is not EXIF (maybe XMP)');\n    return [{ json: { ...result, note: 'APP1 not EXIF — using message.date fallback', log: logs.join('\\n') } }];\n  }\n\n  const exifStart = app1Offset + 10;\n  const byteOrder = buffer.slice(exifStart, exifStart+2).toString('ascii');\n  const le = byteOrder === 'II';\n  logs.push(`🔄 Byte order: ${byteOrder} (${le ? 'little-endian' : 'big-endian'})`);\n\n  const ifd0Offset = exifStart + readUInt32(buffer, exifStart+4, le);\n  const ifd0Count = readUInt16(buffer, ifd0Offset, le);\n  logs.push(`📋 IFD0 entries: ${ifd0Count}`);\n\n  let exifIFDOffset = -1, gpsIFDOffset = -1;\n  for (let i = 0; i < ifd0Count; i++) {\n    const e = ifd0Offset + 2 + i*12;\n    const tag = readUInt16(buffer, e, le);\n    if (tag === 0x8769) { exifIFDOffset = exifStart + readUInt32(buffer, e+8, le); logs.push('✅ ExifIFD pointer found'); }\n    if (tag === 0x8825) { gpsIFDOffset  = exifStart + readUInt32(buffer, e+8, le); logs.push('✅ GPS IFD pointer found'); }\n  }\n\n  if (exifIFDOffset === -1) logs.push('⚠️ No ExifIFD found — no DateTimeOriginal available');\n  if (gpsIFDOffset  === -1) logs.push('⚠️ No GPS IFD found — no GPS coords in EXIF');\n\n  if (exifIFDOffset !== -1) {\n    const exifCount = readUInt16(buffer, exifIFDOffset, le);\n    for (let i = 0; i < exifCount; i++) {\n      const e = exifIFDOffset + 2 + i*12;\n      const tag = readUInt16(buffer, e, le);\n      if (tag === 0x9003) {\n        const valOffset = exifStart + readUInt32(buffer, e+8, le);\n        const dtStr = readString(buffer, valOffset, 19);\n        logs.push(`📅 Raw EXIF DateTimeOriginal string: \"${dtStr}\"`);\n        const [datePart, timePart] = dtStr.split(' ');\n        const [y, mo, d] = datePart.split(':');\n        const [h, mi, s] = timePart.split(':');\n        const dt = new Date(Date.UTC(+y, +mo-1, +d, +h, +mi, +s));\n        const istOffsetMs = 5.5 * 60 * 60 * 1000;\n        result.exifDateTimeOriginal = Math.floor((dt.getTime() - istOffsetMs) / 1000);\n        result.exifFound = true;\n        logs.push(`🕐 EXIF time (parsed as IST→UTC Unix): ${result.exifDateTimeOriginal} = ${new Date(result.exifDateTimeOriginal * 1000).toISOString()}`);\n      }\n    }\n    if (!result.exifFound) logs.push('⚠️ ExifIFD found but tag 0x9003 (DateTimeOriginal) missing');\n  }\n\n  if (gpsIFDOffset !== -1) {\n    const gpsCount = readUInt16(buffer, gpsIFDOffset, le);\n    let latRef='N', lngRef='E', latVal=null, lngVal=null;\n    for (let i = 0; i < gpsCount; i++) {\n      const e = gpsIFDOffset + 2 + i*12;\n      const tag = readUInt16(buffer, e, le);\n      const count = readUInt32(buffer, e+4, le);\n      const valOffset = exifStart + readUInt32(buffer, e+8, le);\n      if (tag === 0x0001) latRef = String.fromCharCode(buffer[e+8]);\n      if (tag === 0x0003) lngRef = String.fromCharCode(buffer[e+8]);\n      if (tag === 0x0002 && count === 3) {\n        latVal = readRational(buffer,valOffset,le) + readRational(buffer,valOffset+8,le)/60 + readRational(buffer,valOffset+16,le)/3600;\n      }\n      if (tag === 0x0004 && count === 3) {\n        lngVal = readRational(buffer,valOffset,le) + readRational(buffer,valOffset+8,le)/60 + readRational(buffer,valOffset+16,le)/3600;\n      }\n    }\n    if (latVal !== null) { result.exifGpsLat = latRef==='S' ? -latVal : latVal; logs.push(`📍 EXIF GPS Lat: ${result.exifGpsLat}`); }\n    if (lngVal !== null) { result.exifGpsLng = lngRef==='W' ? -lngVal : lngVal; logs.push(`📍 EXIF GPS Lng: ${result.exifGpsLng}`); }\n    if (latVal === null && lngVal === null) logs.push('⚠️ GPS IFD found but no lat/lng values');\n  }\n\n} catch(e) {\n  logs.push(`❌ EXIF parse error: ${e.message}`);\n  result.error = e.message;\n}\n\nresult.log = logs.join('\\n');\nreturn [{ json: result }];"
+      },
+      "name": "Parse EXIF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [496, 912],
+      "id": "b2c3d4e5-f6a7-8901-bcde-234567890124"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─── Log Timestamps — inserted between Parse EXIF and Within 2 Minutes? ──────\nconst exif = items[0].json;\n\nconst locationTs  = Number($('Lookup Pending Checkin').item.json.location_timestamp);\nconst messageDate = Number($('Telegram Trigger').item.json.message.date);\nconst exifTs      = exif.exifFound ? Number(exif.exifDateTimeOriginal) : null;\n\nconst usedTs = exif.exifFound ? exifTs : messageDate;\nconst diff   = Math.abs(usedTs - locationTs);\nconst willPass = diff <= 120;\n\nconst log = [\n  '─── Timestamp Comparison ───────────────────────────',\n  `📍 location_timestamp (from Sheets) : ${locationTs}  → ${new Date(locationTs * 1000).toISOString()}`,\n  `📨 message.date (Telegram received) : ${messageDate} → ${new Date(messageDate * 1000).toISOString()}`,\n  `📸 EXIF DateTimeOriginal            : ${exifTs !== null ? exifTs + '  → ' + new Date(exifTs * 1000).toISOString() : 'N/A (no EXIF)'}`,\n  '',\n  `🔀 Using timestamp                  : ${exif.exifFound ? 'EXIF' : 'message.date (fallback)'}`,\n  `⏱️  Difference                       : ${diff} seconds`,\n  `${willPass ? '✅' : '❌'} Within 2 minutes?               : ${willPass ? 'YES — will proceed' : 'NO — will reject'}`,\n  '────────────────────────────────────────────────────'\n].join('\\n');\n\nreturn [{ json: { ...exif, locationTs, messageDate, exifTs, diff, willPass, timestamp_log: log } }];"
+      },
+      "name": "Log Timestamps",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 912],
+      "id": "c3d4e5f6-a7b8-9012-cdef-345678901235"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.diff }}",
+              "operation": "smallerEqual",
+              "value2": 120
+            }
+          ],
+          "string": [
+            {
+              "value1": "={{ $('Lookup Pending Checkin').item.json.chat_id }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "name": "Within 2 Minutes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [944, 912],
+      "id": "e4f5a6b7-c8d9-0123-efab-345678901234"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "search",
+        "queryString": "name = \"Techno Attendance\" and mimeType = \"application/vnd.google-apps.folder\" and trashed = false",
+        "returnAll": false,
+        "limit": 1
+      },
+      "name": "Find Parent Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [1168, 912],
+      "id": "b7c8d9e0-f1a2-3456-bcde-678901234567",
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "REPLACE_WITH_YOUR_DRIVE_CREDENTIAL_ID", "name": "Google Drive account" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.id }}", "operation": "isNotEmpty" }
+          ]
+        }
+      },
+      "name": "Parent Folder Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1392, 912],
+      "id": "c8d9e0f1-a2b3-4567-cdef-789012345678"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "Custom API Call",
+        "requestMethod": "POST",
+        "endpoint": "/files",
+        "body": {
+          "bodyParameters": {
+            "parameters": [
+              { "name": "name", "value": "Techno Attendance" },
+              { "name": "mimeType", "value": "application/vnd.google-apps.folder" }
+            ]
+          }
+        },
+        "qs": {
+          "queryParameters": {
+            "parameters": [
+              { "name": "fields", "value": "id,name" }
+            ]
+          }
+        }
+      },
+      "name": "Create Parent Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [1616, 800],
+      "id": "d9e0f1a2-b3c4-5678-defa-890123456789",
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "REPLACE_WITH_YOUR_DRIVE_CREDENTIAL_ID", "name": "Google Drive account" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "search",
+        "queryString": "={{ `name = \"${new Date($('Telegram Trigger').item.json.message.date * 1000).toISOString().slice(0,10)}\" and mimeType = \"application/vnd.google-apps.folder\" and trashed = false and \"${$('Parent Folder Exists?').item.json.id ?? $('Create Parent Folder').item.json.id}\" in parents` }}",
+        "returnAll": false,
+        "limit": 1
+      },
+      "name": "Find Daily Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [1616, 1024],
+      "id": "e1f2a3b4-c5d6-7890-efab-234567890123",
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "REPLACE_WITH_YOUR_DRIVE_CREDENTIAL_ID", "name": "Google Drive account" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.id }}", "operation": "isNotEmpty" }
+          ]
+        }
+      },
+      "name": "Daily Folder Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1840, 1024],
+      "id": "f2a3b4c5-d6e7-8901-fabc-345678901234"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "Custom API Call",
+        "requestMethod": "POST",
+        "endpoint": "/files",
+        "body": {
+          "bodyParameters": {
+            "parameters": [
+              { "name": "name", "value": "={{ new Date($('Telegram Trigger').item.json.message.date * 1000).toISOString().slice(0,10) }}" },
+              { "name": "mimeType", "value": "application/vnd.google-apps.folder" },
+              { "name": "parents", "value": "={{ [$('Parent Folder Exists?').item.json.id ?? $('Create Parent Folder').item.json.id] }}" }
+            ]
+          }
+        },
+        "qs": {
+          "queryParameters": {
+            "parameters": [
+              { "name": "fields", "value": "id,name" }
+            ]
+          }
+        }
+      },
+      "name": "Create Daily Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [2064, 912],
+      "id": "d9e0f1a2-b3c4-5678-defa-890123456788",
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "REPLACE_WITH_YOUR_DRIVE_CREDENTIAL_ID", "name": "Google Drive account" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "inputDataFieldName": "data",
+        "name": "={{ $('Lookup Pending Checkin').item.json.name + '_' + new Date($('Telegram Trigger').item.json.message.date * 1000).toISOString().slice(0,19).replace('T','_').replace(/:/g,'-') + '.jpg' }}",
+        "driveId": { "__rl": true, "value": "MyDrive", "mode": "list" },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Daily Folder Exists?').item.json.id ?? $('Create Daily Folder').item.json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "name": "Upload Photo to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [2288, 1024],
+      "id": "e0f1a2b3-c4d5-6789-efab-901234567890",
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "REPLACE_WITH_YOUR_DRIVE_CREDENTIAL_ID", "name": "Google Drive account" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Sheet1", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}",
+            "Username": "={{ $('Lookup Pending Checkin').item.json.username }}",
+            "Name": "={{ $('Lookup Pending Checkin').item.json.name }}",
+            "Latitude": "={{ $('Lookup Pending Checkin').item.json.latitude }}",
+            "Longitude": "={{ $('Lookup Pending Checkin').item.json.longitude }}",
+            "Google Maps Link": "={{ 'https://www.google.com/maps?q=' + $('Lookup Pending Checkin').item.json.latitude + ',' + $('Lookup Pending Checkin').item.json.longitude }}",
+            "Photo Link": "={{ 'https://drive.google.com/file/d/' + $('Upload Photo to Drive').item.json.id + '/view' }}",
+            "EXIF Time": "={{ $('Parse EXIF').item.json.exifDateTimeOriginal ? new Date($('Parse EXIF').item.json.exifDateTimeOriginal * 1000).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) : 'N/A' }}",
+            "EXIF GPS Lat": "={{ $('Parse EXIF').item.json.exifGpsLat ?? 'N/A' }}",
+            "EXIF GPS Lng": "={{ $('Parse EXIF').item.json.exifGpsLng ?? 'N/A' }}",
+            "EXIF GPS Link": "={{ ($('Parse EXIF').item.json.exifGpsLat && $('Parse EXIF').item.json.exifGpsLng) ? 'https://www.google.com/maps?q=' + $('Parse EXIF').item.json.exifGpsLat + ',' + $('Parse EXIF').item.json.exifGpsLng : 'N/A' }}",
+            "Parse EXIF Log": "={{ $('Parse EXIF').item.json.log }}",
+            "Timestamp Log": "={{ $('Log Timestamps').item.json.timestamp_log }}",
+            "update_id": "={{ $('Telegram Trigger').item.json.update_id }}",
+            "message": "={{ JSON.stringify($('Telegram Trigger').item.json.message) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Timestamp", "displayName": "Timestamp", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Name", "displayName": "Name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Username", "displayName": "Username", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Latitude", "displayName": "Latitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Longitude", "displayName": "Longitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Google Maps Link", "displayName": "Google Maps Link", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Photo Link", "displayName": "Photo Link", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "EXIF Time", "displayName": "EXIF Time", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "EXIF GPS Lat", "displayName": "EXIF GPS Lat", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "EXIF GPS Lng", "displayName": "EXIF GPS Lng", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "EXIF GPS Link", "displayName": "EXIF GPS Link", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Parse EXIF Log", "displayName": "Parse EXIF Log", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Timestamp Log", "displayName": "Timestamp Log", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "update_id", "displayName": "update_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "message", "displayName": "message", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
+        },
+        "options": { "cellFormat": "RAW" }
+      },
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [2512, 1024],
+      "id": "d745235d-86b3-41d0-a24e-56d75cafb212",
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "pending_checkins", "mode": "name" },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "chat_id",
+              "lookupValue": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+            }
+          ]
+        }
+      },
+      "name": "Delete Pending Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [2736, 1024],
+      "id": "f1a2b3c4-d5e6-7890-fabc-012345678901",
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ '✅ Attendance marked successfully!\\n\\n👤 Name: ' + $('Lookup Pending Checkin').item.json.name + '\\n🕐 Time: ' + new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) + '\\n📍 Location logged!\\n📸 Photo uploaded!' + ($('Parse EXIF').item.json.exifGpsLat ? '\\n🛰️ GPS verified from photo!' : '') + '\\n\\nHave a great day! 🎉' }}",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": { "remove_keyboard": true },
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2960, 1024],
+      "id": "cf249a6b-308b-48d9-9e4e-3a944acbcdb8",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ '⏱️ Photo rejected!\\n\\n' + ($('Log Timestamps').item.json.exifTs !== null ? 'EXIF timestamp shows the photo was not taken within 2 minutes of your location share.' : 'Photo was sent more than 2 minutes after your location share.') + '\\n\\n🔍 Debug info:\\n• Location time: ' + new Date($('Log Timestamps').item.json.locationTs * 1000).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) + '\\n• Photo time: ' + new Date(($('Log Timestamps').item.json.exifTs ?? $('Log Timestamps').item.json.messageDate) * 1000).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) + '\\n• Gap: ' + $('Log Timestamps').item.json.diff + ' seconds\\n\\nPlease send /checkin to start again.' }}",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": { "remove_keyboard": true },
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "Photo Expired Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [944, 1056],
+      "id": "a2b3c4d5-e6f7-8901-abcd-123456789012",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "❌ I didn't understand that.\n\nPlease send /checkin to mark your attendance.",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": { "remove_keyboard": true },
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "Invalid Message Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [48, 1168],
+      "id": "68be3a13-2210-45b1-b2e0-25c78c93193a",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Message Type Router", "type": "main", "index": 0 }]]
+    },
+    "Message Type Router": {
+      "main": [
+        [{ "node": "Ask for Location", "type": "main", "index": 0 }],
+        [{ "node": "Save Pending Checkin", "type": "main", "index": 0 }],
+        [{ "node": "Lookup Pending Checkin", "type": "main", "index": 0 }],
+        [{ "node": "Invalid Message Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save Pending Checkin": {
+      "main": [[{ "node": "Ask for Photo", "type": "main", "index": 0 }]]
+    },
+    "Lookup Pending Checkin": {
+      "main": [[{ "node": "Download Document", "type": "main", "index": 0 }]]
+    },
+    "Download Document": {
+      "main": [[{ "node": "Parse EXIF", "type": "main", "index": 0 }]]
+    },
+    "Parse EXIF": {
+      "main": [[{ "node": "Log Timestamps", "type": "main", "index": 0 }]]
+    },
+    "Log Timestamps": {
+      "main": [[{ "node": "Within 2 Minutes?", "type": "main", "index": 0 }]]
+    },
+    "Within 2 Minutes?": {
+      "main": [
+        [{ "node": "Find Parent Folder", "type": "main", "index": 0 }],
+        [{ "node": "Photo Expired Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Find Parent Folder": {
+      "main": [[{ "node": "Parent Folder Exists?", "type": "main", "index": 0 }]]
+    },
+    "Parent Folder Exists?": {
+      "main": [
+        [{ "node": "Find Daily Folder", "type": "main", "index": 0 }],
+        [{ "node": "Create Parent Folder", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Parent Folder": {
+      "main": [[{ "node": "Find Daily Folder", "type": "main", "index": 0 }]]
+    },
+    "Find Daily Folder": {
+      "main": [[{ "node": "Daily Folder Exists?", "type": "main", "index": 0 }]]
+    },
+    "Daily Folder Exists?": {
+      "main": [
+        [{ "node": "Upload Photo to Drive", "type": "main", "index": 0 }],
+        [{ "node": "Create Daily Folder", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Daily Folder": {
+      "main": [[{ "node": "Upload Photo to Drive", "type": "main", "index": 0 }]]
+    },
+    "Upload Photo to Drive": {
+      "main": [[{ "node": "Log to Google Sheets", "type": "main", "index": 0 }]]
+    },
+    "Log to Google Sheets": {
+      "main": [[{ "node": "Delete Pending Row", "type": "main", "index": 0 }]]
+    },
+    "Delete Pending Row": {
+      "main": [[{ "node": "Send Confirmation", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "b290e41c-c390-43b3-8af5-ad751dfa4267",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "75b6567e80df9fc8f1949c091284bcf28b4e67f6ab2f5590e86672be122405d8"
+  },
+  "id": "eF4B6EO1bnVYvoeJ",
+  "tags": []
+}

@@ -1,0 +1,568 @@
+{
+  "name": "Techno Tracker Attendance (Option2 ForceReply + DataStore)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -900,
+        300
+      ],
+      "webhookId": "techno-tracker-webhook",
+      "id": "tg_trigger_1",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.message?.text ?? ($json.message?.location ? '__location__' : ($json.message?.document ? '__document__' : '__other__')) }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "/checkin",
+              "output": 0
+            },
+            {
+              "value2": "__location__",
+              "output": 1
+            },
+            {
+              "value2": "__document__",
+              "output": 2
+            },
+            {
+              "value2": "",
+              "operation": "regex",
+              "matchRegex": ".*",
+              "output": 3
+            }
+          ]
+        },
+        "fallbackOutput": 3
+      },
+      "name": "Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        300
+      ],
+      "id": "router_1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "=👋 Hi {{ $json.message.from.first_name }}!\n\nPlease share your 📍 location to mark attendance.",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Share Location",
+                    "additionalFields": {
+                      "request_location": true
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "otherOptions": {
+            "resize_keyboard": true,
+            "one_time_keyboard": true
+          }
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Ask Location (Reply Keyboard)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -420,
+        120
+      ],
+      "id": "ask_location_1",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $json.message;\nif (!msg || !msg.location) {\n  return [{ json: { ok: false, error: 'No location in message' } }];\n}\n\nconst userId = msg.from.id;\nconst chatId = msg.chat.id;\nconst locationTs = msg.date; // Telegram server timestamp (seconds)\n\nconst sessionId = `sid_${userId}_${locationTs}`;\n\nconst session = {\n  sid: sessionId,\n  userId,\n  chatId,\n  name: (msg.from.first_name ?? '') + (msg.from.last_name ? ' ' + msg.from.last_name : ''),\n  uname: '@' + (msg.from.username ?? 'N/A'),\n  lat: msg.location.latitude,\n  lng: msg.location.longitude,\n  locationTs,\n  createdAt: Math.floor(Date.now() / 1000)\n};\n\nreturn [{ json: { ok: true, session } }];"
+      },
+      "name": "Build Session From Location",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -420,
+        300
+      ],
+      "id": "build_session_1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.session.chatId }}",
+        "text": "=📍 Location received!\n\nNow please take a live photo 📸 and send it as a *file/document* (not as a photo).\n\n📱 How to send as file:\n• Android: tap 📎 → File → select your photo\n• iPhone: tap 📎 → File → browse photos\n\n⚠️ Must be sent within 2 minutes.\n\n(Just *reply* to this message with the file.)",
+        "replyMarkup": "forceReply",
+        "forceReply": {
+          "force_reply": true,
+          "selective": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "name": "Ask Photo (Force Reply)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -180,
+        300
+      ],
+      "id": "ask_photo_1",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const session = $('Build Session From Location').item.json.session;\nconst prompt = $json;\n\nconst promptMessageId = prompt.message_id;\nif (!promptMessageId) {\n  return [{ json: { ok: false, error: 'No message_id returned from Ask Photo', session } }];\n}\n\nconst key = `prompt:${session.chatId}:${promptMessageId}`;\n\nreturn [{ json: { ok: true, key, session, promptMessageId } }];"
+      },
+      "name": "Make Prompt Key",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        60,
+        300
+      ],
+      "id": "make_key_1"
+    },
+    {
+      "parameters": {
+        "operation": "set",
+        "key": "={{ $json.key }}",
+        "value": "={{ $json.session }}"
+      },
+      "name": "Data Store SET (prompt->session)",
+      "type": "n8n-nodes-base.dataStore",
+      "typeVersion": 1,
+      "position": [
+        320,
+        300
+      ],
+      "id": "ds_set_1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const msg = $json.message;\n\nif (!msg || !msg.document) {\n  return [{ json: { ok: false, error: 'No document in message' } }];\n}\n\nconst chatId = msg.chat.id;\nconst userId = msg.from.id;\nconst messageDate = msg.date;\n\nconst replyTo = msg.reply_to_message;\nif (!replyTo || !replyTo.message_id) {\n  return [{ json: { ok: false, error: 'User did not reply to the photo prompt', chatId, userId, messageDate } }];\n}\n\nconst promptMessageId = replyTo.message_id;\nconst key = `prompt:${chatId}:${promptMessageId}`;\n\nreturn [{ json: { ok: true, key, chatId, userId, messageDate, fileId: msg.document.file_id, fileName: msg.document.file_name ?? null } }];"
+      },
+      "name": "Extract Key From Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -420,
+        520
+      ],
+      "id": "extract_key_1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "key": "={{ $json.key }}"
+      },
+      "name": "Data Store GET (prompt->session)",
+      "type": "n8n-nodes-base.dataStore",
+      "typeVersion": 1,
+      "position": [
+        -180,
+        520
+      ],
+      "id": "ds_get_1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $('Extract Key From Reply').item.json;\nconst ds = $json;\n\nconst session = ds.value ?? ds.data ?? ds;\nif (!session || !session.locationTs) {\n  return [{ json: { ok: false, willPass: false, error: 'Session not found / expired', key: req.key, chatId: req.chatId } }];\n}\n\nif (Number(session.userId) !== Number(req.userId)) {\n  return [{ json: { ok: false, willPass: false, error: 'Prompt belongs to a different user', key: req.key, chatId: req.chatId } }];\n}\n\nconst diff = Math.abs(Number(req.messageDate) - Number(session.locationTs));\nconst willPass = diff <= 120;\n\nreturn [{ json: { ok: true, willPass, diff, key: req.key, chatId: req.chatId, userId: req.userId, messageDate: req.messageDate, fileId: req.fileId, fileName: req.fileName, session } }];"
+      },
+      "name": "Validate Window",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        60,
+        520
+      ],
+      "id": "validate_1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.willPass }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Within 2 Minutes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        320,
+        520
+      ],
+      "id": "if_1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "⚠️ Please reply directly to the bot message asking for the live photo, and attach the file as a document.\n\nSend /checkin to start again.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "No Reply Warning",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -180,
+        720
+      ],
+      "id": "no_reply_1",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ '⏱️ Photo rejected!\\n\\nPhoto was not received within 2 minutes of location share.\\n\\n• Gap: ' + $json.diff + ' seconds\\n\\nPlease send /checkin to start again.' }}",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": {
+          "remove_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Reject Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        660
+      ],
+      "id": "reject_1",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ $json.key }}"
+      },
+      "name": "Data Store DELETE (prompt->session) [FAIL]",
+      "type": "n8n-nodes-base.dataStore",
+      "typeVersion": 1,
+      "position": [
+        800,
+        660
+      ],
+      "id": "ds_del_fail_1"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "fileId": "={{ $json.fileId }}",
+        "download": true,
+        "additionalFields": {}
+      },
+      "name": "Download Document",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        480
+      ],
+      "id": "download_1",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Validate Window').item.json.chatId }}",
+        "text": "={{ '✅ Attendance marked successfully!\\n\\n👤 Name: ' + $('Validate Window').item.json.session.name + '\\n🕐 Time: ' + new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + '\\n📍 Location logged!\\n📸 Photo received!\\n\\nHave a great day! 🎉' }}",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": {
+          "remove_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        480
+      ],
+      "id": "confirm_1",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "key": "={{ $('Validate Window').item.json.key }}"
+      },
+      "name": "Data Store DELETE (prompt->session) [SUCCESS]",
+      "type": "n8n-nodes-base.dataStore",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        480
+      ],
+      "id": "ds_del_ok_1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "❌ I didn't understand that.\n\nPlease send /checkin to mark your attendance.",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": {
+          "remove_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Invalid Message Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -420,
+        720
+      ],
+      "id": "invalid_1",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router": {
+      "main": [
+        [
+          {
+            "node": "Ask Location (Reply Keyboard)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Session From Location",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Key From Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Message Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Session From Location": {
+      "main": [
+        [
+          {
+            "node": "Ask Photo (Force Reply)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Photo (Force Reply)": {
+      "main": [
+        [
+          {
+            "node": "Make Prompt Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make Prompt Key": {
+      "main": [
+        [
+          {
+            "node": "Data Store SET (prompt->session)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Key From Reply": {
+      "main": [
+        [
+          {
+            "node": "Data Store GET (prompt->session)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Store GET (prompt->session)": {
+      "main": [
+        [
+          {
+            "node": "Validate Window",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Window": {
+      "main": [
+        [
+          {
+            "node": "Within 2 Minutes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Within 2 Minutes?": {
+      "main": [
+        [
+          {
+            "node": "Download Document",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reject Reply": {
+      "main": [
+        [
+          {
+            "node": "Data Store DELETE (prompt->session) [FAIL]",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Document": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Data Store DELETE (prompt->session) [SUCCESS]",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "00000000-0000-0000-0000-000000000000",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "REPLACE"
+  },
+  "id": "REPLACE"
+}

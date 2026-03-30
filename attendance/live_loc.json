@@ -1,0 +1,593 @@
+{
+  "name": "live location",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message", "edited_message"],
+        "additionalFields": {}
+      },
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [-560, 160],
+      "webhookId": "techno-tracker-webhook",
+      "id": "749f509f-3d20-49f2-89ac-8d30f751affa",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ ($json.message?.text ?? $json.edited_message?.text) ?? (($json.message?.location ?? $json.edited_message?.location) ? '__location__' : '__unknown__') }}",
+        "rules": {
+          "rules": [
+            { "value2": "/checkin",  "output": 0 },
+            { "value2": "/checkout", "output": 1 },
+            { "value2": "__location__", "output": 2 },
+            { "operation": "regex", "value2IsRegex": true, "matchRegex": ".*", "output": 3 }
+          ]
+        },
+        "fallbackOutput": 3
+      },
+      "name": "Message Type Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [-320, 160],
+      "id": "818da3db-9a0a-4500-8848-20039b859bbe"
+    },
+
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "live_location", "mode": "name" },
+        "filtersUI": {
+          "values": [
+            { "lookupColumn": "Telegram_ID", "lookupValue": "={{ $json.message.from.id }}" },
+            { "lookupColumn": "Status", "lookupValue": "🟢 Active" }
+          ]
+        },
+        "options": { "returnFirstMatch": true }
+      },
+      "name": "Check Active Session (Checkin)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [-80, -80],
+      "id": "ca1b2c3d-0001-4444-aaaa-000000000001",
+      "alwaysOutputData": true,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" } }
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.Telegram_ID }}", "operation": "isEmpty" }
+          ]
+        }
+      },
+      "name": "Has Active Session? (Checkin)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [160, -80],
+      "id": "if1b2c3d-0002-4444-bbbb-000000000002"
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=⚠️ You already have an active check-in session!\n\n📍 Checked in at: {{ $('Check Active Session (Checkin)').item.json.Checkin_Time }}\n\nPlease send /checkout to end your current session before checking in again.",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "Already Checked In Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [400, -240],
+      "id": "tg000001-0003-4444-cccc-000000000003",
+      "webhookId": "already-active-webhook",
+      "credentials": { "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" } }
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=👋 Hi {{ $('Telegram Trigger').item.json.message.from.first_name }}!\n\nTo mark your attendance, please share your *Live Location* 📍\n\n*How to share Live Location:*\n1. Tap the 📎 attachment icon\n2. Select *Location*\n3. Choose *Share Live Location*\n4. Select your preferred duration\n\n⚠️ Static location will *not* be accepted.",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": { "remove_keyboard": true },
+        "additionalFields": { "appendAttribution": false, "parse_mode": "Markdown" }
+      },
+      "name": "Ask for Location",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [400, 80],
+      "id": "94124170-7aab-4b85-970d-f555feb45695",
+      "webhookId": "0ef7706c-4d3a-4cdb-bc02-f994177ad03c",
+      "credentials": { "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" } }
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!($json.message?.location?.live_period) || !!($json.edited_message?.location) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Is Live Location?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [-80, 320],
+      "id": "aa1b2c3d-e4f5-6789-abcd-ef0123456789"
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message?.chat?.id ?? $('Telegram Trigger').item.json.edited_message?.chat?.id }}",
+        "text": "=⚠️ *Static location not accepted!*\n\nPlease share your *Live Location* instead.\n\n*How to share Live Location:*\n1. Tap the 📎 attachment icon\n2. Select *Location*\n3. Choose *Share Live Location*\n4. Select your preferred duration\n\nTry again with /checkin",
+        "additionalFields": { "appendAttribution": false, "parse_mode": "Markdown" }
+      },
+      "name": "Reject Static Location",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [160, 480],
+      "id": "bb2c3d4e-f5a6-7890-cdef-012345678901",
+      "webhookId": "aabbccdd-eeff-0011-2233-445566778899",
+      "credentials": { "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" } }
+    },
+
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "live_location", "mode": "name" },
+        "filtersUI": {
+          "values": [
+            { "lookupColumn": "Telegram_ID", "lookupValue": "={{ ($json.message ?? $json.edited_message).from.id }}" },
+            { "lookupColumn": "Status", "lookupValue": "🟢 Active" }
+          ]
+        },
+        "options": { "returnFirstMatch": true }
+      },
+      "name": "Find Active Session (Location)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [160, 320],
+      "id": "ca2b3c4d-0005-4444-eeee-000000000005",
+      "alwaysOutputData": true,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" } }
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.Telegram_ID }}", "operation": "isNotEmpty" }
+          ]
+        }
+      },
+      "name": "Active Session Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [400, 320],
+      "id": "if3c4d5e-0006-4444-ffff-000000000006"
+    },
+
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "live_location", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Telegram_ID": "={{ ($('Telegram Trigger').item.json.message ?? $('Telegram Trigger').item.json.edited_message).from.id }}",
+            "Current_Lat": "={{ ($('Telegram Trigger').item.json.message ?? $('Telegram Trigger').item.json.edited_message).location.latitude }}",
+            "Current_Lng": "={{ ($('Telegram Trigger').item.json.message ?? $('Telegram Trigger').item.json.edited_message).location.longitude }}",
+            "Current_Maps_Link": "={{ 'https://www.google.com/maps?q=' + ($('Telegram Trigger').item.json.message ?? $('Telegram Trigger').item.json.edited_message).location.latitude + ',' + ($('Telegram Trigger').item.json.message ?? $('Telegram Trigger').item.json.edited_message).location.longitude }}",
+            "Last_Updated": "={{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}",
+            "Accuracy_m": "={{ ($('Telegram Trigger').item.json.message ?? $('Telegram Trigger').item.json.edited_message).location.horizontal_accuracy ?? '' }}"
+          },
+          "matchingColumns": ["Telegram_ID"],
+          "schema": [
+            { "id": "Telegram_ID", "displayName": "Telegram_ID", "required": true, "defaultMatch": true, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Current_Lat", "displayName": "Current_Lat", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Current_Lng", "displayName": "Current_Lng", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Current_Maps_Link", "displayName": "Current_Maps_Link", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Last_Updated", "displayName": "Last_Updated", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Heading", "displayName": "Heading", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Speed_mps", "displayName": "Speed_mps", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Accuracy_m", "displayName": "Accuracy_m", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false }
+          ]
+        },
+        "options": { "cellFormat": "RAW" }
+      },
+      "name": "Update Location in Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [640, 240],
+      "id": "up1d2e3f-0007-4444-aaaa-000000000007",
+      "credentials": { "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" } }
+    },
+
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "live_location", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Checkin_Time": "={{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}",
+            "Username": "={{ '@' + ($('Telegram Trigger').item.json.message.from.username ?? 'N/A') }}",
+            "Name": "={{ ($('Telegram Trigger').item.json.message.from.first_name ?? '') + ($('Telegram Trigger').item.json.message.from.last_name ? ' ' + $('Telegram Trigger').item.json.message.from.last_name : '') }}",
+            "Telegram_ID": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+            "Initial_Lat": "={{ $('Telegram Trigger').item.json.message.location.latitude }}",
+            "Initial_Lng": "={{ $('Telegram Trigger').item.json.message.location.longitude }}",
+            "Initial_Maps_Link": "={{ 'https://www.google.com/maps?q=' + $('Telegram Trigger').item.json.message.location.latitude + ',' + $('Telegram Trigger').item.json.message.location.longitude }}",
+            "Current_Lat": "={{ $('Telegram Trigger').item.json.message.location.latitude }}",
+            "Current_Lng": "={{ $('Telegram Trigger').item.json.message.location.longitude }}",
+            "Current_Maps_Link": "={{ 'https://www.google.com/maps?q=' + $('Telegram Trigger').item.json.message.location.latitude + ',' + $('Telegram Trigger').item.json.message.location.longitude }}",
+            "Last_Updated": "={{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}",
+            "Live_Duration_Sec": "={{ $('Telegram Trigger').item.json.message.location.live_period }}",
+            "Accuracy_m": "={{ $('Telegram Trigger').item.json.message.location.horizontal_accuracy ?? '' }}",
+            "Status": "🟢 Active",
+            "Checkout_Time": "",
+            "Session_End_Reason": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Checkin_Time", "displayName": "Checkin_Time", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Name", "displayName": "Name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Username", "displayName": "Username", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Telegram_ID", "displayName": "Telegram_ID", "required": true, "defaultMatch": true, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Initial_Lat", "displayName": "Initial_Lat", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Initial_Lng", "displayName": "Initial_Lng", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Initial_Maps_Link", "displayName": "Initial_Maps_Link", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Current_Lat", "displayName": "Current_Lat", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Current_Lng", "displayName": "Current_Lng", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Current_Maps_Link", "displayName": "Current_Maps_Link", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Last_Updated", "displayName": "Last_Updated", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Live_Duration_Sec", "displayName": "Live_Duration_Sec", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Accuracy_m", "displayName": "Accuracy_m", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Status", "displayName": "Status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Checkout_Time", "displayName": "Checkout_Time", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Session_End_Reason", "displayName": "Session_End_Reason", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false }
+          ]
+        },
+        "options": { "cellFormat": "RAW" }
+      },
+      "name": "Create New Session Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [640, 80],
+      "id": "ap1e2f3a-0009-4444-cccc-000000000009",
+      "credentials": { "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" } }
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=✅ *Live attendance marked!*\n\n👤 Name: {{ $('Telegram Trigger').item.json.message.from.first_name }}\n🕐 Checked in: {{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}\n📍 Live location tracking started!\n⏱ Duration: {{ $('Telegram Trigger').item.json.message.location.live_period / 60 }} min\n\nSend /checkout when you're done. 👋",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": { "remove_keyboard": true },
+        "additionalFields": { "appendAttribution": false, "parse_mode": "Markdown" }
+      },
+      "name": "Send Checkin Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [880, 80],
+      "id": "tg000010-000a-4444-dddd-00000000000a",
+      "webhookId": "checkin-confirm-webhook",
+      "credentials": { "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" } }
+    },
+
+    {
+      "parameters": {
+        "unit": "seconds",
+        "amount": "={{ $('Telegram Trigger').item.json.message.location.live_period }}"
+      },
+      "name": "Wait for Live Period",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [880, 240],
+      "id": "ww1a2b3c-d4e5-6789-ffff-aabbccddeeff",
+      "webhookId": "wait-live-period-webhook"
+    },
+
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "live_location", "mode": "name" },
+        "filtersUI": {
+          "values": [
+            { "lookupColumn": "Telegram_ID", "lookupValue": "={{ $('Telegram Trigger').item.json.message.from.id }}" },
+            { "lookupColumn": "Status", "lookupValue": "🟢 Active" }
+          ]
+        },
+        "options": { "returnFirstMatch": true }
+      },
+      "name": "Check Still Active After Wait",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1120, 240],
+      "id": "ca3c4d5e-000b-4444-eeee-00000000000b",
+      "alwaysOutputData": true,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" } }
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.Status }}", "operation": "isNotEmpty" }
+          ]
+        }
+      },
+      "name": "Still Active?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1360, 240],
+      "id": "if4d5e6f-000c-4444-ffff-00000000000c"
+    },
+
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "live_location", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Telegram_ID": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+            "Status": "⛔ Expired",
+            "Checkout_Time": "={{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}",
+            "Session_End_Reason": "⛔ Live period expired or location turned off"
+          },
+          "matchingColumns": ["Telegram_ID"],
+          "schema": [
+            { "id": "Telegram_ID", "displayName": "Telegram_ID", "required": true, "defaultMatch": true, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Status", "displayName": "Status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Checkout_Time", "displayName": "Checkout_Time", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Session_End_Reason", "displayName": "Session_End_Reason", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false }
+          ]
+        },
+        "options": { "cellFormat": "RAW" }
+      },
+      "name": "Mark Expired in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1600, 160],
+      "id": "up2e3f4a-000d-4444-aaaa-00000000000d",
+      "credentials": { "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" } }
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=⏰ Your live location session has ended (timer expired or location was turned off).\n\nYour attendance has been recorded. Send /checkin to start a new session.",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "Notify Expiry",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1840, 160],
+      "id": "tg000011-000e-4444-bbbb-00000000000e",
+      "webhookId": "expiry-notify-webhook",
+      "credentials": { "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" } }
+    },
+
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "live_location", "mode": "name" },
+        "filtersUI": {
+          "values": [
+            { "lookupColumn": "Telegram_ID", "lookupValue": "={{ $json.message.from.id }}" },
+            { "lookupColumn": "Status", "lookupValue": "🟢 Active" }
+          ]
+        },
+        "options": { "returnFirstMatch": true }
+      },
+      "name": "Find Active Session (Checkout)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [-80, 640],
+      "id": "ca4d5e6f-000f-4444-cccc-00000000000f",
+      "alwaysOutputData": true,
+      "credentials": { "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" } }
+    },
+
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.Telegram_ID }}", "operation": "isNotEmpty" }
+          ]
+        }
+      },
+      "name": "Has Active Session? (Checkout)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [160, 640],
+      "id": "if5e6f7a-0010-4444-dddd-000000000010"
+    },
+
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "live_location", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Telegram_ID": "={{ $('Telegram Trigger').item.json.message.from.id }}",
+            "Status": "✅ Checked Out",
+            "Checkout_Time": "={{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}",
+            "Session_End_Reason": "✅ User checked out manually"
+          },
+          "matchingColumns": ["Telegram_ID"],
+          "schema": [
+            { "id": "Telegram_ID", "displayName": "Telegram_ID", "required": true, "defaultMatch": true, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Status", "displayName": "Status", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Checkout_Time", "displayName": "Checkout_Time", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false },
+            { "id": "Session_End_Reason", "displayName": "Session_End_Reason", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": false }
+          ]
+        },
+        "options": { "cellFormat": "RAW" }
+      },
+      "name": "Mark Checked Out in Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [400, 560],
+      "id": "up3f4a5b-0011-4444-eeee-000000000011",
+      "credentials": { "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" } }
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=👋 *Checked out successfully!*\n\n🕐 Checkout time: {{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}\n\nSee you next time! You can send /checkin to start a new session.",
+        "additionalFields": { "appendAttribution": false, "parse_mode": "Markdown" }
+      },
+      "name": "Send Checkout Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [640, 560],
+      "id": "tg000012-0012-4444-ffff-000000000012",
+      "webhookId": "checkout-confirm-webhook",
+      "credentials": { "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" } }
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "❌ You don't have an active check-in session.\n\nSend /checkin to start one.",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "No Active Session Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [400, 720],
+      "id": "tg000013-0013-4444-aaaa-000000000013",
+      "webhookId": "no-session-webhook",
+      "credentials": { "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" } }
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message?.chat?.id ?? $('Telegram Trigger').item.json.edited_message?.chat?.id }}",
+        "text": "❌ I didn't understand that.\n\nUse /checkin to mark attendance or /checkout to end your session.",
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "Invalid Message Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [-80, 880],
+      "id": "790961cb-78a5-44ee-998a-9d9e73dd35a2",
+      "webhookId": "565cd1c1-dd32-4abd-bd4f-9c4798bef24c",
+      "credentials": { "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" } }
+    }
+  ],
+
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Message Type Router", "type": "main", "index": 0 }]]
+    },
+    "Message Type Router": {
+      "main": [
+        [{ "node": "Check Active Session (Checkin)", "type": "main", "index": 0 }],
+        [{ "node": "Find Active Session (Checkout)", "type": "main", "index": 0 }],
+        [{ "node": "Is Live Location?", "type": "main", "index": 0 }],
+        [{ "node": "Invalid Message Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Check Active Session (Checkin)": {
+      "main": [[{ "node": "Has Active Session? (Checkin)", "type": "main", "index": 0 }]]
+    },
+    "Has Active Session? (Checkin)": {
+      "main": [
+        [{ "node": "Ask for Location", "type": "main", "index": 0 }],
+        [{ "node": "Already Checked In Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Live Location?": {
+      "main": [
+        [{ "node": "Find Active Session (Location)", "type": "main", "index": 0 }],
+        [{ "node": "Reject Static Location", "type": "main", "index": 0 }]
+      ]
+    },
+    "Find Active Session (Location)": {
+      "main": [[{ "node": "Active Session Exists?", "type": "main", "index": 0 }]]
+    },
+    "Active Session Exists?": {
+      "main": [
+        [{ "node": "Update Location in Row", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Has Active Session? (Checkin)": {
+      "main": [
+        [{ "node": "Ask for Location", "type": "main", "index": 0 }],
+        [{ "node": "Already Checked In Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Ask for Location": {
+      "main": [[]]
+    },
+    "Create New Session Row": {
+      "main": [
+        [
+          { "node": "Send Checkin Confirmation", "type": "main", "index": 0 },
+          { "node": "Wait for Live Period", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Update Location in Row": {
+      "main": [
+        [{ "node": "Create New Session Row", "type": "main", "index": 0 }]
+      ]
+    },
+    "Wait for Live Period": {
+      "main": [[{ "node": "Check Still Active After Wait", "type": "main", "index": 0 }]]
+    },
+    "Check Still Active After Wait": {
+      "main": [[{ "node": "Still Active?", "type": "main", "index": 0 }]]
+    },
+    "Still Active?": {
+      "main": [
+        [{ "node": "Mark Expired in Sheet", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Mark Expired in Sheet": {
+      "main": [[{ "node": "Notify Expiry", "type": "main", "index": 0 }]]
+    },
+    "Find Active Session (Checkout)": {
+      "main": [[{ "node": "Has Active Session? (Checkout)", "type": "main", "index": 0 }]]
+    },
+    "Has Active Session? (Checkout)": {
+      "main": [
+        [{ "node": "Mark Checked Out in Sheet", "type": "main", "index": 0 }],
+        [{ "node": "No Active Session Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Mark Checked Out in Sheet": {
+      "main": [[{ "node": "Send Checkout Confirmation", "type": "main", "index": 0 }]]
+    }
+  },
+
+  "active": true,
+  "settings": { "executionOrder": "v1", "binaryMode": "separate", "availableInMCP": false },
+  "versionId": "917ec0e0-5e79-4af0-a12b-624009d0373b",
+  "meta": { "instanceId": "75b6567e80df9fc8f1949c091284bcf28b4e67f6ab2f5590e86672be122405d8" },
+  "id": "ZhNC2r6Bg1KuYcTK",
+  "tags": []
+}

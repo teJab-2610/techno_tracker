@@ -1,0 +1,265 @@
+{
+  "name": "Techno Tracker Attendance",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [-176, 656],
+      "webhookId": "techno-tracker-webhook",
+      "id": "ea0f131d-ece6-4135-8820-00881fe394ae",
+      "credentials": {
+        "telegramApi": {
+          "id": "oIoSH5DKnlxDqmP6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.message.text ?? ($json.message.location ? '__location__' : '__unknown__') }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "/checkin",
+              "output": 0
+            },
+            {
+              "value2": "__location__",
+              "output": 1
+            },
+            {
+              "value2": "",
+              "operation": "regex",
+              "value2IsRegex": true,
+              "matchRegex": ".*",
+              "output": 2
+            }
+          ]
+        },
+        "fallbackOutput": 2
+      },
+      "name": "Message Type Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [48, 656],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=👋 Hi {{ $('Telegram Trigger').item.json.message.from.first_name }}! Please share your 📍 location to mark attendance.",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Share My Location",
+                    "additionalFields": {
+                      "request_location": true
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": {
+          "resize_keyboard": true,
+          "one_time_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": false
+        }
+      },
+      "name": "Ask for Location",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [272, 480],
+      "id": "48a0afc7-d303-4bfd-8d02-ac6a2f6c2e78",
+      "webhookId": "0ef7706c-4d3a-4cdb-bc02-f994177ad03c",
+      "credentials": {
+        "telegramApi": {
+          "id": "oIoSH5DKnlxDqmP6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Sheet1",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}",
+            "Username": "={{ '@' + ($json.message.from.username ?? 'N/A') }}",
+            "Name": "={{ ($json.message.from.first_name ?? '') + ($json.message.from.last_name ? ' ' + $json.message.from.last_name : '') }}",
+            "Latitude": "={{ $json.message.location.latitude }}",
+            "Longitude": "={{ $json.message.location.longitude }}",
+            "Google Maps Link": "={{ 'https://www.google.com/maps?q=' + $json.message.location.latitude + ',' + $json.message.location.longitude }}",
+            "update_id": "={{ $json.update_id }}",
+            "message": "={{ JSON.stringify($json.message) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Timestamp", "displayName": "Timestamp", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Name", "displayName": "Name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Username", "displayName": "Username", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Latitude", "displayName": "Latitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Longitude", "displayName": "Longitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Google Maps Link", "displayName": "Google Maps Link", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "update_id", "displayName": "update_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "message", "displayName": "message", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [272, 656],
+      "id": "d745235d-86b3-41d0-a24e-56d75cafb212",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "vr9WbNSwwZ5e78dt",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=✅ Attendance marked successfully!\n\n👤 Name: {{ $('Telegram Trigger').item.json.message.from.first_name }}\n🕐 Time: {{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}\n📍 Location logged!\n\nHave a great day! 🎉",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": {
+          "remove_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [512, 656],
+      "id": "cf249a6b-308b-48d9-9e4e-3a944acbcdb8",
+      "webhookId": "3ef34f4a-44e9-476e-b029-e0c4b5a81889",
+      "credentials": {
+        "telegramApi": {
+          "id": "oIoSH5DKnlxDqmP6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "❌ I didn't understand that.\n\nPlease send /checkin to mark your attendance.",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": {
+          "remove_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Invalid Message Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [272, 832],
+      "id": "68be3a13-2210-45b1-b2e0-25c78c93193a",
+      "webhookId": "565cd1c1-dd32-4abd-bd4f-9c4798bef24c",
+      "credentials": {
+        "telegramApi": {
+          "id": "oIoSH5DKnlxDqmP6",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Message Type Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message Type Router": {
+      "main": [
+        [
+          {
+            "node": "Ask for Location",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Message Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "b290e41c-c390-43b3-8af5-ad751dfa4266",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "75b6567e80df9fc8f1949c091284bcf28b4e67f6ab2f5590e86672be122405d8"
+  },
+  "id": "eF4B6EO1bnVYvoeJ",
+  "tags": []
+}

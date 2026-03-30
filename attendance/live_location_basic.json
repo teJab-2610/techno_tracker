@@ -1,0 +1,286 @@
+{
+  "name": "live location",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message", "edited_message"],
+        "additionalFields": {}
+      },
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [-368, 160],
+      "webhookId": "techno-tracker-webhook",
+      "id": "749f509f-3d20-49f2-89ac-8d30f751affa",
+      "credentials": {
+        "telegramApi": {
+          "id": "oIoSH5DKnlxDqmP6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ ($json.message?.text ?? $json.edited_message?.text) ?? (($json.message?.location ?? $json.edited_message?.location) ? '__location__' : '__unknown__') }}",
+        "rules": {
+          "rules": [
+            { "value2": "/checkin" },
+            { "value2": "__location__" },
+            { "operation": "regex" }
+          ]
+        },
+        "fallbackOutput": 2
+      },
+      "name": "Message Type Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [-144, 160],
+      "id": "818da3db-9a0a-4500-8848-20039b859bbe"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=👋 Hi {{ $('Telegram Trigger').item.json.message.from.first_name }}!\n\nTo mark your attendance, please share your *Live Location* 📍\n\n*How to share Live Location:*\n1. Tap the 📎 attachment icon\n2. Select *Location*\n3. Choose *Share Live Location*\n4. Select duration (15 min is fine)\n\n⚠️ Static location will *not* be accepted.",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": {
+          "remove_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_notification": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "name": "Ask for Location",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [80, -16],
+      "id": "94124170-7aab-4b85-970d-f555feb45695",
+      "webhookId": "0ef7706c-4d3a-4cdb-bc02-f994177ad03c",
+      "credentials": {
+        "telegramApi": {
+          "id": "oIoSH5DKnlxDqmP6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!($json.message?.location?.live_period) || !!($json.edited_message?.location) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Is Live Location?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [80, 160],
+      "id": "aa1b2c3d-e4f5-6789-abcd-ef0123456789"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.edited_message }}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Is First Location?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [320, 80],
+      "id": "8b2e2552-c2b7-48b5-ad1a-7d6eff6fd326"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "live_location",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}",
+            "Username": "={{ '@' + (($json.message ?? $json.edited_message).from.username ?? 'N/A') }}",
+            "Name": "={{ (($json.message ?? $json.edited_message).from.first_name ?? '') + (($json.message ?? $json.edited_message).from.last_name ? ' ' + ($json.message ?? $json.edited_message).from.last_name : '') }}",
+            "Telegram_ID": "={{ ($json.message ?? $json.edited_message).from.id }}",
+            "Latitude": "={{ ($json.message ?? $json.edited_message).location.latitude }}",
+            "Longitude": "={{ ($json.message ?? $json.edited_message).location.longitude }}",
+            "Google Maps Link": "={{ 'https://www.google.com/maps?q=' + ($json.message ?? $json.edited_message).location.latitude + ',' + ($json.message ?? $json.edited_message).location.longitude }}",
+            "Live_Duration_Sec": "={{ $json.message?.location?.live_period ?? '' }}",
+            "Location_Type": "={{ $json.message?.location?.live_period ? '🔴 Live Start (' + $json.message.location.live_period + 's)' : '🔄 Live Update' }}",
+            "Heading": "={{ ($json.message ?? $json.edited_message).location.heading ?? '' }}",
+            "Speed_mps": "={{ ($json.message ?? $json.edited_message).location.speed ?? '' }}",
+            "Accuracy_m": "={{ ($json.message ?? $json.edited_message).location.horizontal_accuracy ?? '' }}",
+            "update_id": "={{ $json.update_id }}",
+            "Raw_Message": "={{ JSON.stringify($json.message ?? $json.edited_message) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Timestamp", "displayName": "Timestamp", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Name", "displayName": "Name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Username", "displayName": "Username", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Telegram_ID", "displayName": "Telegram_ID", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Latitude", "displayName": "Latitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Longitude", "displayName": "Longitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Google Maps Link", "displayName": "Google Maps Link", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Live_Duration_Sec", "displayName": "Live_Duration_Sec", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Location_Type", "displayName": "Location_Type", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Heading", "displayName": "Heading", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Speed_mps", "displayName": "Speed_mps", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Accuracy_m", "displayName": "Accuracy_m", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "update_id", "displayName": "update_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false },
+            { "id": "Raw_Message", "displayName": "Raw_Message", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true, "removed": false }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [320, -80],
+      "id": "1241e0eb-a36d-4952-a98f-5597a91f4b22",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "vr9WbNSwwZ5e78dt",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id ?? $('Telegram Trigger').item.json.edited_message.chat.id }}",
+        "text": "=✅ Live attendance marked!\n\n👤 Name: {{ ($('Telegram Trigger').item.json.message ?? $('Telegram Trigger').item.json.edited_message).from.first_name }}\n🕐 Time: {{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}\n📍 Live location logged!\n🔴 Tracking active for {{ $('Telegram Trigger').item.json.message.location.live_period / 60 }} min.\n\nHave a great day! 🎉",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": {
+          "remove_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [560, -80],
+      "id": "c313f810-6c4c-48e5-b23e-9367abe5f73b",
+      "webhookId": "3ef34f4a-44e9-476e-b029-e0c4b5a81889",
+      "credentials": {
+        "telegramApi": {
+          "id": "oIoSH5DKnlxDqmP6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message?.chat?.id ?? $('Telegram Trigger').item.json.edited_message?.chat?.id }}",
+        "text": "=⚠️ *Static location not accepted!*\n\nPlease share your *Live Location* instead.\n\n*How to share Live Location:*\n1. Tap the 📎 attachment icon\n2. Select *Location*\n3. Choose *Share Live Location*\n4. Select any duration (15 min is fine)\n\nTry again with /checkin",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "Markdown"
+        }
+      },
+      "name": "Reject Static Location",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [320, 240],
+      "id": "bb2c3d4e-f5a6-7890-cdef-012345678901",
+      "webhookId": "aabbccdd-eeff-0011-2233-445566778899",
+      "credentials": {
+        "telegramApi": {
+          "id": "oIoSH5DKnlxDqmP6",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message?.chat?.id ?? $('Telegram Trigger').item.json.edited_message?.chat?.id }}",
+        "text": "❌ I didn't understand that.\n\nPlease send /checkin to mark your attendance.",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": {
+          "remove_keyboard": true
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Invalid Message Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [80, 336],
+      "id": "790961cb-78a5-44ee-998a-9d9e73dd35a2",
+      "webhookId": "565cd1c1-dd32-4abd-bd4f-9c4798bef24c",
+      "credentials": {
+        "telegramApi": {
+          "id": "oIoSH5DKnlxDqmP6",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [{ "node": "Message Type Router", "type": "main", "index": 0 }]
+      ]
+    },
+    "Message Type Router": {
+      "main": [
+        [{ "node": "Ask for Location", "type": "main", "index": 0 }],
+        [{ "node": "Is Live Location?", "type": "main", "index": 0 }],
+        [{ "node": "Invalid Message Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Live Location?": {
+      "main": [
+        [{ "node": "Is First Location?", "type": "main", "index": 0 }],
+        [{ "node": "Reject Static Location", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is First Location?": {
+      "main": [
+        [{ "node": "Log to Google Sheets", "type": "main", "index": 0 }],
+        [{ "node": "Log to Google Sheets", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log to Google Sheets": {
+      "main": [
+        [{ "node": "Send Confirmation", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "917ec0e0-5e79-4af0-a12b-624009d0373b",
+  "meta": {
+    "instanceId": "75b6567e80df9fc8f1949c091284bcf28b4e67f6ab2f5590e86672be122405d8"
+  },
+  "id": "ZhNC2r6Bg1KuYcTK",
+  "tags": []
+}

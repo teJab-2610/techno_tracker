@@ -1,0 +1,532 @@
+{
+  "name": "Techno Tracker Attendance",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {}
+      },
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [-400, 656],
+      "webhookId": "techno-tracker-webhook",
+      "id": "ea0f131d-ece6-4135-8820-00881fe394ae",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.message.text ?? ($json.message.location ? '__location__' : ($json.message.photo ? '__photo__' : '__unknown__')) }}",
+        "rules": {
+          "rules": [
+            { "value2": "/checkin", "output": 0 },
+            { "value2": "__location__", "output": 1 },
+            { "value2": "__photo__", "output": 2 },
+            { "value2": "", "operation": "regex", "matchRegex": ".*", "output": 3 }
+          ]
+        },
+        "fallbackOutput": 3
+      },
+      "name": "Message Type Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [-176, 656],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=👋 Hi {{ $('Telegram Trigger').item.json.message.from.first_name }}! Please share your 📍 location to mark attendance.",
+        "replyMarkup": "replyKeyboard",
+        "replyKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "📍 Share My Location",
+                    "additionalFields": { "request_location": true }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "replyKeyboardOptions": { "resize_keyboard": true, "one_time_keyboard": true },
+        "additionalFields": { "appendAttribution": false, "disable_notification": false }
+      },
+      "name": "Ask for Location",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [48, 400],
+      "id": "48a0afc7-d303-4bfd-8d02-ac6a2f6c2e78",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "pending_checkins", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.message.chat.id }}",
+            "user_id": "={{ $json.message.from.id }}",
+            "name": "={{ ($json.message.from.first_name ?? '') + ($json.message.from.last_name ? ' ' + $json.message.from.last_name : '') }}",
+            "username": "={{ '@' + ($json.message.from.username ?? 'N/A') }}",
+            "latitude": "={{ $json.message.location.latitude }}",
+            "longitude": "={{ $json.message.location.longitude }}",
+            "location_timestamp": "={{ $json.message.date }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "chat_id", "displayName": "chat_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "user_id", "displayName": "user_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "name", "displayName": "name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "username", "displayName": "username", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "latitude", "displayName": "latitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "longitude", "displayName": "longitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "location_timestamp", "displayName": "location_timestamp", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
+        },
+        "options": { "cellFormat": "RAW" }
+      },
+      "name": "Save Pending Checkin",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [48, 656],
+      "id": "b1c2d3e4-f5a6-7890-bcde-f12345678901",
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=📍 Location received! Now please take a **live photo** 📸 using your camera and send it here to complete check-in.\n\n⚠️ Photo must be taken within 2 minutes.",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": { "remove_keyboard": true },
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "Ask for Photo",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [272, 656],
+      "id": "c2d3e4f5-a6b7-8901-cdef-123456789012",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "pending_checkins", "mode": "name" },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "chat_id",
+              "lookupValue": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+            }
+          ]
+        },
+        "options": { "returnFirstMatch": true }
+      },
+      "name": "Lookup Pending Checkin",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [48, 912],
+      "id": "d3e4f5a6-b7c8-9012-defa-234567890123",
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.location_timestamp ? ($('Telegram Trigger').item.json.message.date - $json.location_timestamp) : 999 }}",
+              "operation": "smallerEqual",
+              "value2": 120
+            }
+          ],
+          "string": [
+            {
+              "value1": "={{ $json.chat_id }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        },
+        "combineOperation": "all"
+      },
+      "name": "Within 2 Minutes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [272, 912],
+      "id": "e4f5a6b7-c8d9-0123-efab-345678901234"
+    },
+
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "get",
+        "fileId": "={{ $('Telegram Trigger').item.json.message.photo[-1].file_id }}",
+        "additionalFields": {}
+      },
+      "name": "Get Photo File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [496, 800],
+      "id": "f5a6b7c8-d9e0-1234-fabc-456789012345",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/file/bot{{$credentials.telegramApi.accessToken}}/{{ $json.file_path }}",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "name": "Download Photo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [720, 800],
+      "id": "a6b7c8d9-e0f1-2345-abcd-567890123456"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "search",
+        "queryString": "name = \"Techno Attendance\" and mimeType = \"application/vnd.google-apps.folder\" and trashed = false",
+        "returnAll": false,
+        "limit": 1
+      },
+      "name": "Find Parent Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [944, 800],
+      "id": "b7c8d9e0-f1a2-3456-bcde-678901234567",
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "REPLACE_WITH_YOUR_DRIVE_CREDENTIAL_ID", "name": "Google Drive account" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.id }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Parent Folder Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1168, 800],
+      "id": "c8d9e0f1-a2b3-4567-cdef-789012345678"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "upload",
+        "name": "Techno Attendance",
+        "mimeType": "application/vnd.google-apps.folder",
+        "options": {}
+      },
+      "name": "Create Parent Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [1392, 700],
+      "id": "d9e0f1a2-b3c4-5678-defa-890123456789",
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "REPLACE_WITH_YOUR_DRIVE_CREDENTIAL_ID", "name": "Google Drive account" }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "search",
+        "queryString": "={{ 'name = \"' + new Date($('Telegram Trigger').item.json.message.date * 1000).toISOString().slice(0,10) + '\" and mimeType = \"application/vnd.google-apps.folder\" and trashed = false and \"' + ($('Parent Folder Exists?').item.json.id ?? $('Create Parent Folder').item.json.id) + '\" in parents' }}",
+        "returnAll": false,
+        "limit": 1
+      },
+      "name": "Find Daily Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [1392, 912],
+      "id": "e1f2a3b4-c5d6-7890-efab-234567890123",
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "REPLACE_WITH_YOUR_DRIVE_CREDENTIAL_ID", "name": "Google Drive account" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.id }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "name": "Daily Folder Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1616, 912],
+      "id": "f2a3b4c5-d6e7-8901-fabc-345678901234"
+    },
+    {
+      "parameters": {
+        "resource": "fileFolder",
+        "operation": "upload",
+        "name": "={{ new Date($('Telegram Trigger').item.json.message.date * 1000).toISOString().slice(0,10) }}",
+        "mimeType": "application/vnd.google-apps.folder",
+        "driveId": { "__rl": true, "value": "MyDrive", "mode": "list" },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Parent Folder Exists?').item.json.id ?? $('Create Parent Folder').item.json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "name": "Create Daily Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [1840, 800],
+      "id": "d9e0f1a2-b3c4-5678-defa-890123456788",
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "REPLACE_WITH_YOUR_DRIVE_CREDENTIAL_ID", "name": "Google Drive account" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "name": "={{ $('Lookup Pending Checkin').item.json.name + '_' + new Date($('Telegram Trigger').item.json.message.date * 1000).toISOString().slice(0,19).replace('T','_').replace(/:/g,'-') + '.jpg' }}",
+        "driveId": { "__rl": true, "value": "MyDrive", "mode": "list" },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Daily Folder Exists?').item.json.id ?? $('Create Daily Folder').item.json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "name": "Upload Photo to Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [2064, 912],
+      "id": "e0f1a2b3-c4d5-6789-efab-901234567890",
+      "credentials": {
+        "googleDriveOAuth2Api": { "id": "REPLACE_WITH_YOUR_DRIVE_CREDENTIAL_ID", "name": "Google Drive account" }
+      }
+    },
+
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "Sheet1", "mode": "name" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}",
+            "Username": "={{ $('Lookup Pending Checkin').item.json.username }}",
+            "Name": "={{ $('Lookup Pending Checkin').item.json.name }}",
+            "Latitude": "={{ $('Lookup Pending Checkin').item.json.latitude }}",
+            "Longitude": "={{ $('Lookup Pending Checkin').item.json.longitude }}",
+            "Google Maps Link": "={{ 'https://www.google.com/maps?q=' + $('Lookup Pending Checkin').item.json.latitude + ',' + $('Lookup Pending Checkin').item.json.longitude }}",
+            "Photo Link": "={{ 'https://drive.google.com/file/d/' + $('Upload Photo to Drive').item.json.id + '/view' }}",
+            "update_id": "={{ $('Telegram Trigger').item.json.update_id }}",
+            "message": "={{ JSON.stringify($('Telegram Trigger').item.json.message) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            { "id": "Timestamp", "displayName": "Timestamp", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Name", "displayName": "Name", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Username", "displayName": "Username", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Latitude", "displayName": "Latitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Longitude", "displayName": "Longitude", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Google Maps Link", "displayName": "Google Maps Link", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "Photo Link", "displayName": "Photo Link", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "update_id", "displayName": "update_id", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true },
+            { "id": "message", "displayName": "message", "required": false, "defaultMatch": false, "display": true, "type": "string", "canBeUsedToMatch": true }
+          ]
+        },
+        "options": { "cellFormat": "RAW" }
+      },
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1616, 912],
+      "id": "d745235d-86b3-41d0-a24e-56d75cafb212",
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": { "__rl": true, "value": "1MJxe_nR8B5sTHNtBTHt-H5aUUOLmbOrIEvK4jSTSoIg", "mode": "id" },
+        "sheetName": { "__rl": true, "value": "pending_checkins", "mode": "name" },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "chat_id",
+              "lookupValue": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+            }
+          ]
+        }
+      },
+      "name": "Delete Pending Row",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [1840, 912],
+      "id": "f1a2b3c4-d5e6-7890-fabc-012345678901",
+      "credentials": {
+        "googleSheetsOAuth2Api": { "id": "vr9WbNSwwZ5e78dt", "name": "Google Sheets account" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=✅ Attendance marked successfully!\n\n👤 Name: {{ $('Lookup Pending Checkin').item.json.name }}\n🕐 Time: {{ new Date().toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'}) }}\n📍 Location logged!\n📸 Photo uploaded!\n\nHave a great day! 🎉",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": { "remove_keyboard": true },
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "Send Confirmation",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2064, 912],
+      "id": "cf249a6b-308b-48d9-9e4e-3a944acbcdb8",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=⏱️ Photo expired! It's been more than 2 minutes since your location share.\n\nPlease send /checkin to start again.",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": { "remove_keyboard": true },
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "Photo Expired Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [496, 1024],
+      "id": "a2b3c4d5-e6f7-8901-abcd-123456789012",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "❌ I didn't understand that.\n\nPlease send /checkin to mark your attendance.",
+        "replyMarkup": "replyKeyboardRemove",
+        "replyKeyboardRemove": { "remove_keyboard": true },
+        "additionalFields": { "appendAttribution": false }
+      },
+      "name": "Invalid Message Reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [48, 1168],
+      "id": "68be3a13-2210-45b1-b2e0-25c78c93193a",
+      "credentials": {
+        "telegramApi": { "id": "oIoSH5DKnlxDqmP6", "name": "Telegram account" }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{ "node": "Message Type Router", "type": "main", "index": 0 }]]
+    },
+    "Message Type Router": {
+      "main": [
+        [{ "node": "Ask for Location", "type": "main", "index": 0 }],
+        [{ "node": "Save Pending Checkin", "type": "main", "index": 0 }],
+        [{ "node": "Lookup Pending Checkin", "type": "main", "index": 0 }],
+        [{ "node": "Invalid Message Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Save Pending Checkin": {
+      "main": [[{ "node": "Ask for Photo", "type": "main", "index": 0 }]]
+    },
+    "Lookup Pending Checkin": {
+      "main": [[{ "node": "Within 2 Minutes?", "type": "main", "index": 0 }]]
+    },
+    "Within 2 Minutes?": {
+      "main": [
+        [{ "node": "Get Photo File", "type": "main", "index": 0 }],
+        [{ "node": "Photo Expired Reply", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Photo File": {
+      "main": [[{ "node": "Download Photo", "type": "main", "index": 0 }]]
+    },
+    "Download Photo": {
+      "main": [[{ "node": "Find Parent Folder", "type": "main", "index": 0 }]]
+    },
+    "Find Parent Folder": {
+      "main": [[{ "node": "Parent Folder Exists?", "type": "main", "index": 0 }]]
+    },
+    "Parent Folder Exists?": {
+      "main": [
+        [{ "node": "Find Daily Folder", "type": "main", "index": 0 }],
+        [{ "node": "Create Parent Folder", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Parent Folder": {
+      "main": [[{ "node": "Find Daily Folder", "type": "main", "index": 0 }]]
+    },
+    "Find Daily Folder": {
+      "main": [[{ "node": "Daily Folder Exists?", "type": "main", "index": 0 }]]
+    },
+    "Daily Folder Exists?": {
+      "main": [
+        [{ "node": "Upload Photo to Drive", "type": "main", "index": 0 }],
+        [{ "node": "Create Daily Folder", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Daily Folder": {
+      "main": [[{ "node": "Upload Photo to Drive", "type": "main", "index": 0 }]]
+    },
+    "Upload Photo to Drive": {
+      "main": [[{ "node": "Log to Google Sheets", "type": "main", "index": 0 }]]
+    },
+    "Log to Google Sheets": {
+      "main": [[{ "node": "Delete Pending Row", "type": "main", "index": 0 }]]
+    },
+    "Delete Pending Row": {
+      "main": [[{ "node": "Send Confirmation", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "b290e41c-c390-43b3-8af5-ad751dfa4266",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "75b6567e80df9fc8f1949c091284bcf28b4e67f6ab2f5590e86672be122405d8"
+  },
+  "id": "eF4B6EO1bnVYvoeJ",
+  "tags": []
+}
