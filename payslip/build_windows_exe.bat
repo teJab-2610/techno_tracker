@@ -23,8 +23,31 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [1/3] Installing dependencies...
-pip install openpyxl reportlab qrcode pillow pyinstaller
+echo [1/5] Creating virtual environment...
+if exist venv (
+    echo Virtual environment already exists, reusing it.
+) else (
+    python -m venv venv
+    if errorlevel 1 (
+        echo ERROR: Failed to create virtual environment.
+        pause
+        exit /b 1
+    )
+)
+
+echo.
+echo [2/5] Activating virtual environment...
+call venv\Scripts\activate.bat
+if errorlevel 1 (
+    echo ERROR: Failed to activate virtual environment.
+    pause
+    exit /b 1
+)
+
+echo.
+echo [3/5] Upgrading pip and installing dependencies...
+python -m pip install --upgrade pip
+python -m pip install openpyxl reportlab qrcode pillow pyinstaller
 if errorlevel 1 (
     echo ERROR: Failed to install dependencies.
     pause
@@ -32,7 +55,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/3] Building executable...
+echo [4/5] Building executable...
 pyinstaller ^
     --onefile ^
     --windowed ^
@@ -50,7 +73,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/3] Cleaning up build artifacts...
+echo [5/5] Cleaning up build artifacts...
 rmdir /s /q build 2>nul
 del /q PayslipGenerator.spec 2>nul
 
@@ -61,5 +84,7 @@ echo  Executable: dist\PayslipGenerator.exe
 echo ============================================================
 echo.
 echo Double-click PayslipGenerator.exe to launch the GUI.
+echo.
+echo NOTE: The "venv" folder can be deleted to save space.
 echo.
 pause
