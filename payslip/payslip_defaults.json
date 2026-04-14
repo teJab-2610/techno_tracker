@@ -1,0 +1,19 @@
+{
+  "earnings": ["AD", "AE", "AG", "AJ", "AH", "AF", "AI"],
+  "deductions": ["AT", "AU", "AV", "AW"],
+  "show_if_zero": false,
+  "show_days": true,
+  "label_overrides": {
+    "AD": "Basic - (A)",
+    "AE": "HRA - (B)",
+    "AG": "Conveyance - (C)",
+    "AJ": "BONUS - (D)",
+    "AH": "PL / Leave - (E)",
+    "AF": "Other Allowance",
+    "AI": "OT Hours Amount",
+    "AT": "PF (On Basic-A)",
+    "AU": "E.S.I.C (0.75%)",
+    "AV": "L W F",
+    "AW": "Professional Tax"
+  }
+}

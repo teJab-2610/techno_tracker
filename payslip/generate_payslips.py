@@ -23,11 +23,13 @@ Examples:
 import argparse
 import hashlib
 import io
+import json
 import os
 import sys
 from datetime import datetime
 
 import openpyxl
+from openpyxl.utils import get_column_letter
 import qrcode
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -97,7 +99,11 @@ def fmt_amount(val):
 
 
 def read_wage_sheet(wb):
-    """Read employee data from the Wage Sheet."""
+    """Read employee data from the Wage Sheet.
+
+    Stores both named keys (for backward compat / attendance matching)
+    and column letter keys (for dynamic column selection).
+    """
     ws = wb["Wage Sheet"]
     employees = []
 
@@ -107,6 +113,7 @@ def read_wage_sheet(wb):
             continue
 
         emp = {
+            # Backward-compatible named keys
             "sno": int(sno),
             "emp_code": row[2].value,
             "name_attendance": row[3].value,
@@ -137,6 +144,12 @@ def read_wage_sheet(wb):
             "total_deduction": row[49].value,
             "take_home": row[50].value,
         }
+
+        # Store ALL column values by column letter for dynamic access
+        for col_idx in range(len(row)):
+            col_letter = get_column_letter(col_idx + 1)
+            emp[col_letter] = row[col_idx].value
+
         employees.append(emp)
 
     return employees
@@ -283,6 +296,84 @@ def safe_num(val, default=0):
         return default
 
 
+# Default configuration matching current hardcoded behavior
+DEFAULT_CONFIG = {
+    "earnings": ["AD", "AE", "AG", "AJ", "AH", "AF", "AI"],
+    "deductions": ["AT", "AU", "AV", "AW"],
+    "show_if_zero": False,
+    "show_days": True,
+    "label_overrides": {
+        "AD": "Basic - (A)",
+        "AE": "HRA - (B)",
+        "AG": "Conveyance - (C)",
+        "AJ": "BONUS - (D)",
+        "AH": "PL / Leave - (E)",
+        "AF": "Other Allowance",
+        "AI": "OT Hours Amount",
+        "AT": "PF (On Basic-A)",
+        "AU": "E.S.I.C (0.75%)",
+        "AV": "L W F",
+        "AW": "Professional Tax",
+    },
+}
+
+# Columns used for general info / system purposes (excluded from column selection UI)
+SYSTEM_COLUMNS = {
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L",
+    "M", "N", "O", "P", "Q", "R", "S", "T",
+}
+
+
+def read_column_headers(wb):
+    """Read header row (row 4) from Wage Sheet.
+
+    Returns list of (col_letter, header_name) for all non-empty headers.
+    """
+    ws = wb["Wage Sheet"]
+    headers = []
+    for col_idx in range(1, ws.max_column + 1):
+        val = ws.cell(row=4, column=col_idx).value
+        if val is not None and str(val).strip():
+            col_letter = get_column_letter(col_idx)
+            headers.append((col_letter, str(val).strip()))
+    return headers
+
+
+def get_config_path():
+    """Get the path to payslip_defaults.json next to the script/exe."""
+    if getattr(sys, "frozen", False):
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_dir, "payslip_defaults.json")
+
+
+def load_config(config_path=None):
+    """Load config from payslip_defaults.json. Creates default if not exists."""
+    if config_path is None:
+        config_path = get_config_path()
+
+    if os.path.exists(config_path):
+        with open(config_path, "r") as f:
+            config = json.load(f)
+        # Merge with defaults for any missing keys
+        for key, val in DEFAULT_CONFIG.items():
+            if key not in config:
+                config[key] = val
+        return config
+    else:
+        save_config(DEFAULT_CONFIG, config_path)
+        return dict(DEFAULT_CONFIG)
+
+
+def save_config(config, config_path=None):
+    """Save config to payslip_defaults.json."""
+    if config_path is None:
+        config_path = get_config_path()
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+
+
 def generate_qr_code(emp, month_str, net_pay, generated_at):
     """Generate a QR code image containing payslip verification data."""
     emp_name = (emp["name_aadhar"] or emp["name_attendance"] or "").strip()
@@ -317,8 +408,17 @@ def generate_qr_code(emp, month_str, net_pay, generated_at):
     return buf, f"TS-{verify_hash}"
 
 
-def generate_payslip_pdf(emp, attendance, month_date, output_path, serial_no, bw_mode=False):
-    """Generate a single payslip PDF."""
+def generate_payslip_pdf(emp, attendance, month_date, output_path, serial_no, bw_mode=False,
+                         earnings_cols=None, deductions_cols=None, col_headers=None,
+                         label_overrides=None, show_if_zero=False, show_days=True):
+    """Generate a single payslip PDF.
+
+    earnings_cols/deductions_cols: list of Excel column letters (e.g., ["AD", "AE"]).
+    col_headers: dict mapping col_letter -> header_name from Excel.
+    label_overrides: dict mapping col_letter -> custom PDF label.
+    show_if_zero: if False, skip earnings/deductions with value 0.
+    show_days: if True, show "Days in Month" / "Days Worked" row.
+    """
 
     if isinstance(month_date, datetime):
         month_str = month_date.strftime("%B %Y").upper()
@@ -327,21 +427,17 @@ def generate_payslip_pdf(emp, attendance, month_date, output_path, serial_no, bw
 
     att = attendance.get(emp["emp_code"], {})
 
-    # Values
-    basic = safe_num(emp["consolidated_actual"])
-    hra = safe_num(emp["hra_actual"])
-    conveyance = safe_num(emp["conveyance_actual"])
-    bonus = safe_num(emp["bonus_actual"])
-    leave = safe_num(emp["leave_actual"])
-    ot_amount = safe_num(emp["ot_amount"])
-    other_allow = safe_num(emp["other_allow_actual"])
-    pf = safe_num(emp["pf_employee"])
-    esic = safe_num(emp["esic_employee"])
-    lwf = safe_num(emp["lwf_employee"])
-    pt = safe_num(emp["pt"])
-    gross = safe_num(emp["gross_actual"])
-    total_ded = safe_num(emp["total_deduction"])
-    net_pay = safe_num(emp["take_home"])
+    # Use defaults if not specified
+    if earnings_cols is None:
+        earnings_cols = DEFAULT_CONFIG["earnings"]
+    if deductions_cols is None:
+        deductions_cols = DEFAULT_CONFIG["deductions"]
+    if label_overrides is None:
+        label_overrides = DEFAULT_CONFIG.get("label_overrides", {})
+    if col_headers is None:
+        col_headers = {}
+
+    # General info values
     days_in_month = int(safe_num(emp["days_in_month"]))
     working_days = int(safe_num(emp["working_days"]))
 
@@ -425,8 +521,9 @@ def generate_payslip_pdf(emp, attendance, month_date, output_path, serial_no, bw
         ["Employee Name", emp_name.strip(), "Location", emp["location"] or ""],
         ["Designation", emp["designation"] or "", "Month & Year", month_str],
         ["UAN NO", str(emp["uan"] or ""), "ESIC NO", str(emp["esic"] or "")],
-        ["No Of Days This Month", str(days_in_month), "Days Worked", str(working_days)],
     ]
+    if show_days:
+        detail_data.append(["No Of Days This Month", str(days_in_month), "Days Worked", str(working_days)])
     detail_table = Table(detail_data, colWidths=[40 * mm, 55 * mm, 35 * mm, 50 * mm])
     detail_table.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
@@ -449,25 +546,28 @@ def generate_payslip_pdf(emp, attendance, month_date, output_path, serial_no, bw
         ["Earnings", "", "Deductions", ""],
     ]
 
-    # Build earnings list
-    earnings = [
-        ("Basic - (A)", basic),
-        ("HRA - (B)", hra),
-        ("Conveyance - (C)", conveyance),
-        ("BONUS - (D)", bonus),
-        ("PL / Leave - (E)", leave),
-    ]
-    if other_allow > 0:
-        earnings.append(("Other Allowance", other_allow))
-    if ot_amount > 0:
-        earnings.append(("OT Hours Amount", ot_amount))
+    # Build earnings list dynamically from selected columns
+    earnings = []
+    for col in earnings_cols:
+        val = safe_num(emp.get(col, 0))
+        if not show_if_zero and val == 0:
+            continue
+        label = label_overrides.get(col, col_headers.get(col, col))
+        earnings.append((label, val))
 
-    deductions = [
-        ("PF (On Basic-A)", pf),
-        ("E.S.I.C (0.75%)", esic),
-        ("L W F", lwf),
-        ("Professional Tax", pt),
-    ]
+    # Build deductions list dynamically from selected columns
+    deductions = []
+    for col in deductions_cols:
+        val = safe_num(emp.get(col, 0))
+        if not show_if_zero and val == 0:
+            continue
+        label = label_overrides.get(col, col_headers.get(col, col))
+        deductions.append((label, val))
+
+    # Compute totals dynamically
+    gross = sum(item[1] for item in earnings)
+    total_ded = sum(item[1] for item in deductions)
+    net_pay = gross - total_ded
 
     max_rows = max(len(earnings), len(deductions))
     for i in range(max_rows):
@@ -594,6 +694,9 @@ def main():
     parser.add_argument("--output-dir", help="Output directory for PDFs")
     parser.add_argument("--bw", action="store_true", help="Generate black and white payslips (no colored backgrounds)")
     parser.add_argument("--list", action="store_true", help="List employees and exit")
+    parser.add_argument("--config", help="Path to payslip_defaults.json config file")
+    parser.add_argument("--earnings-cols", help="Comma-separated earnings column letters (e.g. AD,AE,AG)")
+    parser.add_argument("--deductions-cols", help="Comma-separated deductions column letters (e.g. AT,AU,AV,AW)")
     args = parser.parse_args()
 
     print(f"Loading workbook: {args.excel_file}")
@@ -601,6 +704,19 @@ def main():
 
     employees = read_wage_sheet(wb)
     month_date, attendance = read_attendance(wb)
+
+    # Read column headers for PDF labels
+    headers_list = read_column_headers(wb)
+    col_headers = {letter: name for letter, name in headers_list}
+
+    # Load config
+    config = load_config(args.config)
+
+    # CLI overrides for columns
+    if args.earnings_cols:
+        config["earnings"] = [c.strip().upper() for c in args.earnings_cols.split(",")]
+    if args.deductions_cols:
+        config["deductions"] = [c.strip().upper() for c in args.deductions_cols.split(",")]
 
     if not employees:
         print("No employee data found in Wage Sheet!")
@@ -681,7 +797,15 @@ def main():
         filename = f"{safe_name}_{month_str}.pdf"
         filepath = os.path.join(output_dir, filename)
 
-        generate_payslip_pdf(emp, attendance, month_date, filepath, idx + 1, args.bw)
+        generate_payslip_pdf(
+            emp, attendance, month_date, filepath, idx + 1, args.bw,
+            earnings_cols=config["earnings"],
+            deductions_cols=config["deductions"],
+            col_headers=col_headers,
+            label_overrides=config.get("label_overrides", {}),
+            show_if_zero=config.get("show_if_zero", False),
+            show_days=config.get("show_days", True),
+        )
         print(f"  [{idx + 1}/{len(filtered)}] {name} -> {filename}")
 
     print(f"\nDone! {len(filtered)} payslip(s) saved to {output_dir}/")
